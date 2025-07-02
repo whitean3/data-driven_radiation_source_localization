@@ -199,7 +199,7 @@ def _(dataframes, sensors):
     return
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""## viz""")
     return
@@ -314,23 +314,22 @@ def _(ExtraTreesRegressor, LeaveOneOut, np, sensors):
             #  this RF maps sensor network readout to source location
         
             print("\t\ttraining the RF.")
-            sensor_network_readout = data_loo.loc[train_index, sensors]
-            rf = ExtraTreesRegressor(n_estimators=500)
-            source_locs = data_loo.loc[train_index, ["x_s", "y_s"]]
+            sensor_network_readout = data_loo.loc[train_index, sensors] # X_train
+            source_locs = data_loo.loc[train_index, ["x_s", "y_s"]]     # y_train
+            rf = ExtraTreesRegressor(n_estimators=1000)
             rf.fit(sensor_network_readout, source_locs)
 
-        
             # test RF
             print("\t\ttesting the RF.")
-            sensor_network_readout_test = data_loo.loc[test_index, sensors]
-            source_locs_test_pred = rf.predict(sensor_network_readout_test)[0] # there's only one...
+            sensor_network_readout_test = data_loo.loc[test_index, sensors] # X_test
+            source_locs_test_pred = rf.predict(sensor_network_readout_test)[0] # y_test (only one)
 
-            # TODO UQ
 
             # store LOO data
             data_loo.loc[test_index, "x_s_pred"] = source_locs_test_pred[0]
             data_loo.loc[test_index, "y_s_pred"] = source_locs_test_pred[1]
-            # to avoid warning
+        
+            # store UQ
             for tree in rf.estimators_:
                 tree.feature_names_in_ = rf.feature_names_in_
             data_loo.loc[test_index, "ensemble pred source locs"] = [np.array([
