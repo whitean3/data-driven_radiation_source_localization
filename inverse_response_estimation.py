@@ -13,7 +13,9 @@ def _():
     import marimo as mo
     import matplotlib.pyplot as plt
     import seaborn as sns
-    return csv, mo, np, os, pd, plt, sns
+    from sklearn.ensemble import RandomForestRegressor, HistGradientBoostingRegressor
+    from sklearn.model_selection import LeaveOneOut
+    return LeaveOneOut, RandomForestRegressor, csv, mo, np, os, pd, plt, sns
 
 
 @app.cell(hide_code=True)
@@ -239,13 +241,17 @@ def _(box_dims, data, plt, sensor_to_loc, sensors):
             s=65,
             edgecolor="black",
             vmin=0,
+            marker="s",
             vmax=max_response
         )
 
         plt.colorbar(label="count rate [CPS]", extend="max")
     
         # plot source location
-        plt.scatter(data.loc[exp, "x_s"], data.loc[exp, "y_s"], marker="+", s=65, color="red", label="source location")
+        plt.scatter(
+            data.loc[exp, "x_s"], data.loc[exp, "y_s"], marker="+", 
+            s=65, color="red", label="source location"
+        )
 
         # TODO draw obstacles
     
@@ -270,6 +276,194 @@ def _(data, sensors, sns):
 def _(data, plt, sensors, sns):
     g = sns.pairplot(data[sensors])
     plt.show()
+    return
+
+
+@app.cell
+def _(mo):
+    mo.md(r"""# ::icon-park:new-computer:: ML""")
+    return
+
+
+@app.cell
+def _(data):
+    data
+    return
+
+
+@app.cell
+def _(LeaveOneOut, RandomForestRegressor, np, sensors):
+    def do_loo_rf(data, train_independent_models=False):
+        if train_independent_models:
+            print("training independent models.")
+        else:
+            print("training multi-output model.")
+        
+        data_loo = data.copy()
+        data_loo["x_s_pred"] = np.zeros((len(data)))
+        data_loo["y_s_pred"] = np.zeros((len(data)))
+    
+        loo = LeaveOneOut()
+        for i, (train_index, test_index) in enumerate(loo.split(data)):
+            print("fold :", i)
+            print("\ttest expt: ", test_index)
+            print("\ttrain expt: ", train_index)
+    
+            # train a multi-output RF on the train data
+            #  argument: fix x, move y and response v different.
+            #  this RF maps sensor network readout to source location
+            sensor_network_readout = data.loc[train_index, sensors]
+            print("\t\ttraining the RF.")
+            if train_independent_models:
+                rf_x = RandomForestRegressor()
+                rf_x.fit(sensor_network_readout, data.loc[train_index, "x_s"])
+                rf_y = RandomForestRegressor()
+                rf_y.fit(sensor_network_readout, data.loc[train_index, "y_s"])
+            else:
+                rf = RandomForestRegressor(n_estimators=500)
+                source_locs = data.loc[train_index, ["x_s", "y_s"]]
+                rf.fit(sensor_network_readout, source_locs)
+
+        
+            # test RF
+            print("\t\ttesting the RF.")
+            sensor_network_readout_test = data.loc[test_index, sensors]
+
+            if train_independent_models: 
+                data_loo.loc[test_index, "x_s_pred"] = rf_x.predict(sensor_network_readout_test)
+                data_loo.loc[test_index, "y_s_pred"] = rf_y.predict(sensor_network_readout_test)
+            else:
+                source_locs_test_pred = rf.predict(sensor_network_readout_test)[0] # there's only one...
+    
+                # TODO UQ
+    
+                # store LOO data
+                data_loo.loc[test_index, "x_s_pred"] = source_locs_test_pred[0]
+                data_loo.loc[test_index, "y_s_pred"] = source_locs_test_pred[1]
+
+
+        # compute error = distance from true to predicted source
+        data_loo["error"] = np.sqrt(
+            (data_loo["x_s"] - data_loo["x_s_pred"]) ** 2 + (data_loo["y_s"] - data_loo["y_s_pred"]) ** 2
+        )
+        return data_loo
+    return (do_loo_rf,)
+
+
+@app.cell
+def _(data):
+    data
+    return
+
+
+@app.cell
+def _(data, do_loo_rf):
+    data_loo = do_loo_rf(data, train_independent_models=False)
+    data_loo
+    return (data_loo,)
+
+
+@app.cell
+def _(data_loo):
+    print("mean error: ", data_loo["error"].mean())
+    return
+
+
+@app.cell
+def _(data_loo, plt):
+    plt.figure()
+    plt.hist(data_loo["error"])
+    plt.xlabel("error [in]")
+    plt.ylabel("# experiments")
+    plt.show()
+    return
+
+
+@app.cell
+def _(box_dims, data_loo, plt):
+    f, (ax1, ax2) = plt.subplots(1, 2, sharey=True, sharex=True)
+    for ax in [ax1, ax2]:
+        ax.set_aspect('equal', 'box')
+        ax.set_xlim(0, box_dims[0])
+        ax.set_ylim(0, box_dims[1])
+    ax1.set_xlabel("x$_s$ [in]")
+    ax2.set_xlabel("y$_s$ [in]")
+    ax1.set_ylabel("predicted x$_s$ [in]")
+    ax2.set_ylabel("predicted y$_s$ [in]")
+
+    ax1.plot([0, box_dims[0]], [0, box_dims[0]], color="black", linestyle="--")
+    ax2.plot([0, box_dims[1]], [0, box_dims[1]], color="black", linestyle="--")
+
+    ax1.scatter(data_loo["x_s"], data_loo["x_s_pred"])
+    ax2.scatter(data_loo["y_s"], data_loo["y_s_pred"])
+
+
+    plt.show()
+    return
+
+
+@app.cell
+def _(box_dims, data_loo, plt, sensor_to_loc, sensors):
+    def explain_errors(data_loo):
+        plt.figure()
+    
+        # source locs. color by error.
+        plt.scatter(
+            data_loo["x_s"], data_loo["y_s"],
+            c=data_loo["error"], vmin=0, vmax=data_loo["error"].max(),
+            clip_on=False, edgecolors="black"
+        )
+        plt.colorbar(label="error [in]")
+
+        # show predicted locs
+        plt.scatter(
+            data_loo["x_s_pred"], data_loo["y_s_pred"],
+            clip_on=False, color="gray", alpha=0.3
+        )
+        for i in range(len(data_loo)):
+            plt.plot(
+                [data_loo.loc[i, "x_s"], data_loo.loc[i, "x_s_pred"]],
+                [data_loo.loc[i, "y_s"], data_loo.loc[i, "y_s_pred"]],
+                color="gray", linestyle="--", alpha=0.3
+            )
+    
+
+        # plot sensors
+        plt.scatter(
+            [sensor_to_loc[sensor][0] for sensor in sensors],
+            [sensor_to_loc[sensor][1] for sensor in sensors],
+            color="white", s=50, edgecolor="black", marker="s", label="sensor",
+            clip_on=False
+        )
+    
+        # plot obstacles TODO
+    
+        plt.gca().set_aspect('equal', 'box')
+        plt.xlabel("x [in]")
+        plt.ylabel("y [in]")
+        plt.xlim(0, box_dims[0])
+        plt.ylim(0, box_dims[1])
+        plt.show()
+
+    explain_errors(data_loo)
+    return
+
+
+@app.cell
+def _(box_dims):
+    box_dims
+    return
+
+
+@app.cell
+def _(data_loo):
+    data_loo
+    return
+
+
+@app.cell
+def _():
+    # source loc and wher ethey were predicted.
     return
 
 
