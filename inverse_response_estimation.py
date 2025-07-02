@@ -293,18 +293,14 @@ def _(data):
 
 @app.cell
 def _(LeaveOneOut, RandomForestRegressor, np, sensors):
-    def do_loo_rf(data, train_independent_models=False):
-        if train_independent_models:
-            print("training independent models.")
-        else:
-            print("training multi-output model.")
-        
+    def do_loo_rf(data):
         data_loo = data.copy()
         data_loo["x_s_pred"] = np.zeros((len(data)))
         data_loo["y_s_pred"] = np.zeros((len(data)))
+        data_loo["ensemble pred source locs"] = [np.zeros(500) for _ in range(len(data_loo))]
     
         loo = LeaveOneOut()
-        for i, (train_index, test_index) in enumerate(loo.split(data)):
+        for i, (train_index, test_index) in enumerate(loo.split(data_loo)):
             print("fold :", i)
             print("\ttest expt: ", test_index)
             print("\ttrain expt: ", train_index)
@@ -312,35 +308,30 @@ def _(LeaveOneOut, RandomForestRegressor, np, sensors):
             # train a multi-output RF on the train data
             #  argument: fix x, move y and response v different.
             #  this RF maps sensor network readout to source location
-            sensor_network_readout = data.loc[train_index, sensors]
+        
             print("\t\ttraining the RF.")
-            if train_independent_models:
-                rf_x = RandomForestRegressor()
-                rf_x.fit(sensor_network_readout, data.loc[train_index, "x_s"])
-                rf_y = RandomForestRegressor()
-                rf_y.fit(sensor_network_readout, data.loc[train_index, "y_s"])
-            else:
-                rf = RandomForestRegressor(n_estimators=500)
-                source_locs = data.loc[train_index, ["x_s", "y_s"]]
-                rf.fit(sensor_network_readout, source_locs)
+            sensor_network_readout = data_loo.loc[train_index, sensors]
+            rf = RandomForestRegressor(n_estimators=500)
+            source_locs = data_loo.loc[train_index, ["x_s", "y_s"]]
+            rf.fit(sensor_network_readout, source_locs)
 
         
             # test RF
             print("\t\ttesting the RF.")
-            sensor_network_readout_test = data.loc[test_index, sensors]
+            sensor_network_readout_test = data_loo.loc[test_index, sensors]
+            source_locs_test_pred = rf.predict(sensor_network_readout_test)[0] # there's only one...
 
-            if train_independent_models: 
-                data_loo.loc[test_index, "x_s_pred"] = rf_x.predict(sensor_network_readout_test)
-                data_loo.loc[test_index, "y_s_pred"] = rf_y.predict(sensor_network_readout_test)
-            else:
-                source_locs_test_pred = rf.predict(sensor_network_readout_test)[0] # there's only one...
-    
-                # TODO UQ
-    
-                # store LOO data
-                data_loo.loc[test_index, "x_s_pred"] = source_locs_test_pred[0]
-                data_loo.loc[test_index, "y_s_pred"] = source_locs_test_pred[1]
+            # TODO UQ
 
+            # store LOO data
+            data_loo.loc[test_index, "x_s_pred"] = source_locs_test_pred[0]
+            data_loo.loc[test_index, "y_s_pred"] = source_locs_test_pred[1]
+            # to avoid warning
+            for tree in rf.estimators_:
+                tree.feature_names_in_ = rf.feature_names_in_
+            data_loo.loc[test_index, "ensemble pred source locs"] = [np.array([
+                tree.predict(sensor_network_readout_test)[0] for tree in rf.estimators_
+            ])]
 
         # compute error = distance from true to predicted source
         data_loo["error"] = np.sqrt(
@@ -358,7 +349,7 @@ def _(data):
 
 @app.cell
 def _(data, do_loo_rf):
-    data_loo = do_loo_rf(data, train_independent_models=False)
+    data_loo = do_loo_rf(data)
     data_loo
     return (data_loo,)
 
@@ -446,6 +437,58 @@ def _(box_dims, data_loo, plt, sensor_to_loc, sensors):
         plt.show()
 
     explain_errors(data_loo)
+    return
+
+
+@app.cell
+def _(box_dims, data_loo, plt, sensor_to_loc, sensors):
+    def viz_prediction(data_loo, exp):
+        max_response = 75.0 
+    
+        plt.figure()
+    
+        # source locs. color by error.
+        plt.scatter(
+            data_loo.loc[exp, "x_s"], data_loo.loc[exp, "y_s"],
+            clip_on=False, edgecolors="black", color="red"
+        )
+    
+        # plot sensors
+        plt.scatter(
+            [sensor_to_loc[sensor][0] for sensor in sensors],
+            [sensor_to_loc[sensor][1] for sensor in sensors],
+            s=50, edgecolor="black", marker="s", label="sensor",
+            clip_on=False,
+            c=[data_loo.loc[exp, sensor] for sensor in sensors],
+            vmin=0,
+            vmax=max_response
+        )
+
+        plt.colorbar(label="count rate [CPS]", extend="max")
+
+        # plot predicted responses
+        plt.scatter(
+            [xs[0] for xs in data_loo.loc[exp, "ensemble pred source locs"]],
+            [xs[1] for xs in data_loo.loc[exp, "ensemble pred source locs"]],
+            marker="+", color="gray"
+        )
+    
+        # plot obstacles TODO
+    
+        plt.gca().set_aspect('equal', 'box')
+        plt.xlabel("x [in]")
+        plt.ylabel("y [in]")
+        plt.xlim(0, box_dims[0])
+        plt.ylim(0, box_dims[1])
+        plt.show()
+
+    viz_prediction(data_loo, 5)
+    return
+
+
+@app.cell
+def _(data):
+    data
     return
 
 
