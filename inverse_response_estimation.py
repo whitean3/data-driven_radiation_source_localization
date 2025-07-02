@@ -13,9 +13,11 @@ def _():
     import marimo as mo
     import matplotlib.pyplot as plt
     import seaborn as sns
-    from sklearn.ensemble import RandomForestRegressor, HistGradientBoostingRegressor
+    from sklearn.ensemble import RandomForestRegressor, ExtraTreesRegressor
     from sklearn.model_selection import LeaveOneOut
-    return LeaveOneOut, RandomForestRegressor, csv, mo, np, os, pd, plt, sns
+    from sklearn.neighbors import KNeighborsRegressor
+    from sklearn.preprocessing import StandardScaler
+    return ExtraTreesRegressor, LeaveOneOut, csv, mo, np, os, pd, plt, sns
 
 
 @app.cell(hide_code=True)
@@ -207,12 +209,13 @@ def _(mo):
 def _(box_dims, data, plt):
     def viz_source_locs(data):
         plt.figure()
-        plt.scatter(data["x_s"], data["y_s"])
+        plt.scatter(data["x_s"], data["y_s"], clip_on=False, color="red")
         plt.gca().set_aspect('equal', 'box')
         plt.xlabel("x [in]")
         plt.ylabel("y [in]")
         plt.xlim(0, box_dims[0])
         plt.ylim(0, box_dims[1])
+        plt.title("source locations")
         plt.show()
 
     viz_source_locs(data)
@@ -260,6 +263,7 @@ def _(box_dims, data, plt, sensor_to_loc, sensors):
         plt.ylabel("y [in]")
         plt.xlim(0, box_dims[0])
         plt.ylim(0, box_dims[1])
+        plt.title(f"experiment {exp}")
         plt.show()
     
     viz_sensor_readout(data, 4)
@@ -292,7 +296,7 @@ def _(data):
 
 
 @app.cell
-def _(LeaveOneOut, RandomForestRegressor, np, sensors):
+def _(ExtraTreesRegressor, LeaveOneOut, np, sensors):
     def do_loo_rf(data):
         data_loo = data.copy()
         data_loo["x_s_pred"] = np.zeros((len(data)))
@@ -311,7 +315,7 @@ def _(LeaveOneOut, RandomForestRegressor, np, sensors):
         
             print("\t\ttraining the RF.")
             sensor_network_readout = data_loo.loc[train_index, sensors]
-            rf = RandomForestRegressor(n_estimators=500)
+            rf = ExtraTreesRegressor(n_estimators=500)
             source_locs = data_loo.loc[train_index, ["x_s", "y_s"]]
             rf.fit(sensor_network_readout, source_locs)
 
@@ -441,7 +445,7 @@ def _(box_dims, data_loo, plt, sensor_to_loc, sensors):
 
 
 @app.cell
-def _(box_dims, data_loo, plt, sensor_to_loc, sensors):
+def _(box_dims, data_loo, np, plt, sensor_to_loc, sensors):
     def viz_prediction(data_loo, exp):
         max_response = 75.0 
     
@@ -467,9 +471,10 @@ def _(box_dims, data_loo, plt, sensor_to_loc, sensors):
         plt.colorbar(label="count rate [CPS]", extend="max")
 
         # plot predicted responses
+        n_samples = 25
         plt.scatter(
-            [xs[0] for xs in data_loo.loc[exp, "ensemble pred source locs"]],
-            [xs[1] for xs in data_loo.loc[exp, "ensemble pred source locs"]],
+            np.random.choice([xs[0] for xs in data_loo.loc[exp, "ensemble pred source locs"]], n_samples),
+            np.random.choice([xs[1] for xs in data_loo.loc[exp, "ensemble pred source locs"]], n_samples),
             marker="+", color="gray"
         )
     
@@ -482,7 +487,13 @@ def _(box_dims, data_loo, plt, sensor_to_loc, sensors):
         plt.ylim(0, box_dims[1])
         plt.show()
 
-    viz_prediction(data_loo, 5)
+    viz_prediction(data_loo, 6)
+    return
+
+
+@app.cell
+def _():
+    # feature importance what sensor is most important?
     return
 
 
