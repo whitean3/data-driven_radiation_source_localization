@@ -76,6 +76,21 @@ def _(dataframes):
 
 @app.cell
 def _():
+    x_s = [28.0, 38.0, 4.0, 2.0, 10.0, 41.0,32.0, 5.0, 40.0, 24.0, 16.0, 7.0, 18.0, 35.0, 33.0, 30.0, 23.0, 26.0, 19.0, 12.0, 0.0, 9.0, 21.0, 37.0, 14.0]
+    y_s = [14.0, 30.0, 28.0, 21.0, 16.0, 10.0, 4.0, 6.0, 18.0, 32.0, 19.0, 22.0, 26.0, 12.0,  8.0, 6.0, 11.0,29.0, 15.0, 3.0, 0.0, 1.0, 23.0, 23.0, 32.0]
+    return
+
+
+@app.cell
+def _(dataframes):
+    def filter_by_SN(SN):
+        values = []
+        for df in dataframes:
+            # Filter rows where filter_column equals filter_value
+            filtered_df = df[df["SN"] == SN]
+            # Add the values from target_column to our list
+            values.extend(filtered_df["ICR"].tolist())
+        return values
     return
 
 
