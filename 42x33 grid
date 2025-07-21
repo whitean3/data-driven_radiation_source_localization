@@ -9,9 +9,9 @@ Detector Positions:
 			D21: 26,1
 			D17: 38,8
 			D12: 40,24
-Material positions:
+Material positions:	
 		Lead: 
-			Blocks:
+			Blocks: Dimensions are in x,y format so 0,3 2x8 is a rectangle that has corners at 0,3 1,3 0,10 and 1,10. Positions are for origin in top left corner.
 			 0,3   2x8
 			 0,11  2x8
 			 0,21  2x8
@@ -19,19 +19,19 @@ Material positions:
 			 2,11  4x8
 			 32,25 2x8
 			 34,25 8x2
-			Disks:
+			Disks: coordinates are centers of disks
 			 r=3.125
 			 7,17
 			 10,17
 			 13,17
-		Cardboard
+		Cardboard: coordinate is starting point, it extends in the x direction 17" form that square
 			20,24 18x0.5
-		MDF
+		MDF: Similar to lead blocks. 7x1 vs 1x7 is horizontal vs vertical orientation
 			6,10  7x1
 			28,0  1x7
 			28,7  14x1
 			38,0  1x7
-	    Pine
+	    Pine:
 	    	0,19 10x1.5
 
 Test Points
