@@ -73,8 +73,8 @@ def _():
 def _(box_dims, pd):
     df_source_locs = pd.DataFrame(
         {
-            'x_s': [28.0, 38.0, 4.0, 2.0, 10.0, 41.0,32.0, 5.0, 40.0, 24.0, 16.0, 7.0, 18.0, 35.0, 33.0, 30.0, 23.0, 26.0, 19.0, 12.0, 0.0, 9.0, 21.0, 37.0, 14.0],
-            'y_s': [14.0, 30.0, 28.0, 21.0, 16.0, 10.0, 4.0, 6.0, 18.0, 32.0, 19.0, 22.0, 26.0, 12.0,  8.0, 6.0, 11.0,29.0, 15.0, 3.0, 0.0, 1.0, 23.0, 23.0, 32.0]
+            'x_s': [28.0, 38.0, 4.0, 2.0, 10.0, 41.0,32.0, 5.0, 40.0, 24.0, 16.0, 7.0, 18.0, 35.0, 33.0, 30.0, 23.0, 26.0, 19.0, 12.0, 0.0, 9.0, 21.0, 37.0, 14.0, 2, 5,  7,  7, 10, 10, 12, 16, 40, 41, 31, 31, 34, 41, 41, 41, 36, 28, 17, 12,  0,  7,  7,  7, 10, ],
+            'y_s': [14.0, 30.0, 28.0, 21.0, 16.0, 10.0, 4.0, 6.0, 18.0, 32.0, 19.0, 22.0, 26.0, 12.0,  8.0, 6.0, 11.0,29.0, 15.0, 3.0, 0.0, 1.0, 23.0, 23.0, 32.0,  0, 0,  0,  4,  0,  4,  4,  4,  0,  4,  4,  0,  0, 15, 20, 28, 32, 32, 32, 32, 32, 32, 29, 25, 25]
         }
     ) # note this is with origin in top left
     df_source_locs["y_s"] = box_dims[1] - df_source_locs["y_s"]
@@ -120,7 +120,7 @@ def _():
 
 @app.cell
 def _():
-    n_expts = 25
+    n_expts = 50
     return (n_expts,)
 
 
@@ -187,7 +187,7 @@ def _(dataframes, df_source_locs, n_expts, pd, sensors):
         # join source locs
         data = pd.concat([df_source_locs, data], axis=1)
         return data
-    
+
     data = make_data_nice(dataframes, df_source_locs)
     data
     return (data,)
@@ -231,9 +231,9 @@ def _():
 def _(box_dims, data, plt, sensor_to_loc, sensors):
     def viz_sensor_readout(data, exp):
         max_response = 75.0 # data.loc[exp, sensors].max()
-    
+
         plt.figure()
-    
+
         # plot sensors; color acc to response
         plt.scatter(
             # x locs of sensors
@@ -249,7 +249,7 @@ def _(box_dims, data, plt, sensor_to_loc, sensors):
         )
 
         plt.colorbar(label="count rate [CPS]", extend="max")
-    
+
         # plot source location
         plt.scatter(
             data.loc[exp, "x_s"], data.loc[exp, "y_s"], marker="+", 
@@ -257,7 +257,7 @@ def _(box_dims, data, plt, sensor_to_loc, sensors):
         )
 
         # TODO draw obstacles
-    
+
         plt.gca().set_aspect('equal', 'box')
         plt.xlabel("x [in]")
         plt.ylabel("y [in]")
@@ -265,7 +265,7 @@ def _(box_dims, data, plt, sensor_to_loc, sensors):
         plt.ylim(0, box_dims[1])
         plt.title(f"experiment {exp}")
         plt.show()
-    
+
     viz_sensor_readout(data, 4)
     return
 
@@ -302,17 +302,17 @@ def _(ExtraTreesRegressor, LeaveOneOut, np, sensors):
         data_loo["x_s_pred"] = np.zeros((len(data)))
         data_loo["y_s_pred"] = np.zeros((len(data)))
         data_loo["ensemble pred source locs"] = [np.zeros(500) for _ in range(len(data_loo))]
-    
+
         loo = LeaveOneOut()
         for i, (train_index, test_index) in enumerate(loo.split(data_loo)):
             print("fold :", i)
             print("\ttest expt: ", test_index)
             print("\ttrain expt: ", train_index)
-    
+
             # train a multi-output RF on the train data
             #  argument: fix x, move y and response v different.
             #  this RF maps sensor network readout to source location
-        
+
             print("\t\ttraining the RF.")
             sensor_network_readout = data_loo.loc[train_index, sensors] # X_train
             source_locs = data_loo.loc[train_index, ["x_s", "y_s"]]     # y_train
@@ -328,7 +328,7 @@ def _(ExtraTreesRegressor, LeaveOneOut, np, sensors):
             # store LOO data
             data_loo.loc[test_index, "x_s_pred"] = source_locs_test_pred[0]
             data_loo.loc[test_index, "y_s_pred"] = source_locs_test_pred[1]
-        
+
             # store UQ
             for tree in rf.estimators_:
                 tree.feature_names_in_ = rf.feature_names_in_
@@ -400,7 +400,7 @@ def _(box_dims, data_loo, plt):
 def _(box_dims, data_loo, plt, sensor_to_loc, sensors):
     def explain_errors(data_loo):
         plt.figure()
-    
+
         # source locs. color by error.
         plt.scatter(
             data_loo["x_s"], data_loo["y_s"],
@@ -420,7 +420,7 @@ def _(box_dims, data_loo, plt, sensor_to_loc, sensors):
                 [data_loo.loc[i, "y_s"], data_loo.loc[i, "y_s_pred"]],
                 color="gray", linestyle="--", alpha=0.3
             )
-    
+
 
         # plot sensors
         plt.scatter(
@@ -429,9 +429,9 @@ def _(box_dims, data_loo, plt, sensor_to_loc, sensors):
             color="white", s=50, edgecolor="black", marker="s", label="sensor",
             clip_on=False
         )
-    
+
         # plot obstacles TODO
-    
+
         plt.gca().set_aspect('equal', 'box')
         plt.xlabel("x [in]")
         plt.ylabel("y [in]")
@@ -447,15 +447,15 @@ def _(box_dims, data_loo, plt, sensor_to_loc, sensors):
 def _(box_dims, data_loo, np, plt, sensor_to_loc, sensors):
     def viz_prediction(data_loo, exp):
         max_response = 75.0 
-    
+
         plt.figure()
-    
+
         # source locs. color by error.
         plt.scatter(
             data_loo.loc[exp, "x_s"], data_loo.loc[exp, "y_s"],
             clip_on=False, edgecolors="black", color="red"
         )
-    
+
         # plot sensors
         plt.scatter(
             [sensor_to_loc[sensor][0] for sensor in sensors],
@@ -476,9 +476,9 @@ def _(box_dims, data_loo, np, plt, sensor_to_loc, sensors):
             np.random.choice([xs[1] for xs in data_loo.loc[exp, "ensemble pred source locs"]], n_samples),
             marker="+", color="gray"
         )
-    
+
         # plot obstacles TODO
-    
+
         plt.gca().set_aspect('equal', 'box')
         plt.xlabel("x [in]")
         plt.ylabel("y [in]")
@@ -486,7 +486,7 @@ def _(box_dims, data_loo, np, plt, sensor_to_loc, sensors):
         plt.ylim(0, box_dims[1])
         plt.show()
 
-    viz_prediction(data_loo, 6)
+    viz_prediction(data_loo, 45)
     return
 
 
