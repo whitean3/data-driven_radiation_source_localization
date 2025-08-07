@@ -18,18 +18,7 @@ def _():
     from sklearn.model_selection import LeaveOneOut
     from sklearn.neighbors import KNeighborsRegressor
     from sklearn.preprocessing import StandardScaler
-    return (
-        ExtraTreesRegressor,
-        LeaveOneOut,
-        csv,
-        joblib,
-        mo,
-        np,
-        os,
-        pd,
-        plt,
-        sns,
-    )
+    return ExtraTreesRegressor, LeaveOneOut, csv, mo, np, os, pd, plt, sns
 
 
 @app.cell(hide_code=True)
@@ -383,7 +372,7 @@ def _(mo):
 
 @app.cell
 def _(ExtraTreesRegressor, LeaveOneOut, np, sensors):
-    def do_loo_cv(data, n_estimators=100, verbose=False):
+    def do_loo_cv(data, n_estimators=100, verbose=True, very_verbose=False):
         data_loo = data.copy()
         data_loo["x_s_pred"] = np.zeros((len(data)))
         data_loo["y_s_pred"] = np.zeros((len(data)))
@@ -391,15 +380,16 @@ def _(ExtraTreesRegressor, LeaveOneOut, np, sensors):
 
         loo = LeaveOneOut()
         for i, (train_index, test_index) in enumerate(loo.split(data_loo)):
-            print("fold :", i, " / ", data.shape[0])
             if verbose:
+                print("fold :", i, " / ", data.shape[0])
+            if very_verbose:
                 print("\ttest expt: ", test_index)
                 print("\ttrain expt: ", train_index)
 
             # train a multi-output RF on the train data
             #  argument: fix x, move y and response v different.
             #  this RF maps sensor network readout to source location
-            if verbose:
+            if very_verbose:
                 print("\t\ttraining the tree ensemble.")
             sensor_network_readout = data_loo.loc[train_index, sensors] # X_train
             source_locs = data_loo.loc[train_index, ["x_s", "y_s"]]     # y_train
@@ -407,7 +397,7 @@ def _(ExtraTreesRegressor, LeaveOneOut, np, sensors):
             tree_ensemble.fit(sensor_network_readout, source_locs)
 
             # test RF
-            if verbose:
+            if very_verbose:
                 print("\t\ttesting the tree ensemble.")
             sensor_network_readout_test = data_loo.loc[test_index, sensors] # X_test
             source_locs_test_pred = tree_ensemble.predict(sensor_network_readout_test)[0] # y_test (only one)
@@ -427,6 +417,8 @@ def _(ExtraTreesRegressor, LeaveOneOut, np, sensors):
             ]
 
         # compute error = distance from true to predicted source
+        data_loo["error_x"] = np.abs(data_loo["x_s"] - data_loo["x_s_pred"])
+        data_loo["error_y"] = np.abs(data_loo["y_s"] - data_loo["y_s_pred"])
         data_loo["error"] = np.sqrt(
             (data_loo["x_s"] - data_loo["x_s_pred"]) ** 2 + (data_loo["y_s"] - data_loo["y_s_pred"]) ** 2
         )
@@ -508,6 +500,11 @@ def _(box_dims, data_loo, plt):
 
     ax1.scatter(data_loo["x_s"], data_loo["x_s_pred"], clip_on=False)
     ax2.scatter(data_loo["y_s"], data_loo["y_s_pred"], clip_on=False)
+
+    x_err = data_loo["error_x"].mean()
+    y_err = data_loo["error_y"].mean()
+    ax1.legend(title=f"error = {x_err:.2f} in")
+    ax2.legend(title=f"error = {y_err:.2f} in")
 
     plt.show()
     return
@@ -610,7 +607,7 @@ def _(box_dims, data_loo, np, plt, sensor_to_loc, sensors):
     return
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""### sensor importance""")
     return
@@ -629,19 +626,13 @@ def _(ExtraTreesRegressor, sensors):
 
 @app.cell
 def _(data, n_sensors, np, plt, sensors, train_tree_ensemble):
-    tree_ensemble = train_tree_ensemble(data)
+    _tree_ensemble = train_tree_ensemble(data)
 
     plt.figure()
     plt.xlabel("sensor")
     plt.ylabel("feature importance")
     plt.xticks(np.arange(n_sensors), sensors)
-    plt.bar(np.arange(n_sensors), tree_ensemble.feature_importances_)
-    return
-
-
-@app.cell
-def _():
-    # source loc and wher ethey were predicted.
+    plt.bar(np.arange(n_sensors), _tree_ensemble.feature_importances_)
     return
 
 
@@ -659,68 +650,54 @@ def _(mo):
 
 
 @app.cell
-def _(run_learning_curve):
-    run_learning_curve.value
-    return
-
-
-@app.cell
-def _(data, do_loo_rf, run_learning_curve):
+def _(data, do_loo_cv, np, pd, run_learning_curve):
     if run_learning_curve.value:
-        errors = []
+        n_repeats = 3
     
-        for i in range(2,len(data)):
-            data_loo_t, _ = do_loo_rf(data[0:i])
-            errors.append(data_loo_t["error"].mean())
-            print("mean error: ", data_loo_t["error"].mean())
+        nb_datas = [5 * i for i in range(1, 16)]
+        assert nb_datas[-1] <= len(data)
+    
+        loo_errors_mu  = []
+        loo_errors_std = []
+        for nb_data in nb_datas:
+            print(f"running with {nb_data} data points.")
+            loo_errors = []
+            for r in range(n_repeats):
+                data_loo_lc = do_loo_cv(data.sample(nb_data).reset_index(), verbose=False)
+                loo_errors.append(data_loo_lc["error"].mean())
+            loo_errors_mu.append(np.mean(loo_errors))
+            loo_errors_std.append(np.std(loo_errors))
 
-    return (errors,)
-
-
-@app.cell
-def _(data_loo, errors):
-    errors.append(data_loo["error"].mean())
-    return
-
-
-@app.cell
-def _(errors):
-    errors
-    return
-
-
-@app.cell
-def _():
-    return
+    learning_curve = pd.DataFrame(
+        {"# data": nb_datas, "loo error [in]": loo_errors_mu, "loo error std [in]": loo_errors_std}
+    )
+    return (learning_curve,)
 
 
 @app.cell
-def _(errors, plt):
+def _(learning_curve, plt):
     plt.figure()
-    plt.plot(list(range(2,76)), errors)
-    plt.gca().set_ylim(bottom=0)
-    plt.xlabel("# Samples")
-    plt.ylabel("Mean error (in)")
-
+    plt.xlabel("# data")
+    plt.ylabel("LOO error [in]")
+    plt.errorbar(
+        learning_curve["# data"], learning_curve["loo error [in]"], 
+        yerr=learning_curve["loo error std [in]"], marker="s"
+    )
+    plt.title("learning curve")
+    plt.show()
     return
 
 
 @app.cell
-def _(joblib, rf):
-    joblib.dump(rf, 'random_forest_model_75s.pkl')
+def _(mo):
+    mo.md(r"""## live demo-ing""")
     return
 
 
 @app.cell
-def _(read_csv):
-    demo = read_csv(file_path="demo.csv")
-    return (demo,)
-
-
-@app.cell
-def _(demo):
-    demo
-    return
+def _(data, train_tree_ensemble):
+    tree_ensemble = train_tree_ensemble(data)
+    return (tree_ensemble,)
 
 
 @app.cell
@@ -770,7 +747,7 @@ def _(demo_pred):
 
 
 @app.cell
-def _(demo_input, rf):
+def _(demo_input, tree_ensemble):
     demo_input.iloc[0, :] = [
         29.812,
     23.847,
@@ -783,22 +760,9 @@ def _(demo_input, rf):
 
 
     ]
-    demo_pred = rf.predict(demo_input)
+    demo_pred = tree_ensemble.predict(demo_input)
     demo_pred
     return (demo_pred,)
-
-
-@app.cell
-def _(demo_pred):
-    33.0-demo_pred[0][1]
-
-    return
-
-
-@app.cell
-def _(demo_input):
-    demo_input
-    return
 
 
 @app.cell
@@ -812,6 +776,18 @@ def _():
     19.077
     78.744
 
+    return
+
+
+@app.cell
+def _(mo):
+    mo.md(r"""# background data""")
+    return
+
+
+@app.cell
+def _(mo):
+    mo.md(r"""# sensor tampering data""")
     return
 
 
