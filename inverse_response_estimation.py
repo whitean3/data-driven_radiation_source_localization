@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.14.10"
+__generated_with = "0.14.9"
 app = marimo.App(width="medium")
 
 
@@ -36,12 +36,14 @@ def _():
 def _(mo):
     mo.md(
         r"""
-    # ::icon-park:data:: data read in sensor network response data
+    # ::icon-park:data:: read in sensor network response data
 
     * each data set is the sensor network response to a source in a particular location.
     * `SN` gives sensor network ID
     * `ICR` gives count rate
     * the list of source locations are below.
+  
+    ## locations of detectors in the environment
     """
     )
     return
@@ -49,7 +51,7 @@ def _(mo):
 
 @app.cell
 def _(box_dims, np):
-    # sensor locs. orgigin is top left here.
+    # sensor locs. origin is top left here. (x, y) positions
     sensor_to_loc = {
         		"16518": [2, 3],
     			"16520": [2, 18],
@@ -76,9 +78,26 @@ def _():
 
 
 @app.cell
-def _():
+def _(sensor_to_loc):
     n_sensors = 8
+    assert len(sensor_to_loc) == n_sensors
     return (n_sensors,)
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(
+        r"""
+    ## location of radioactive source placed in the environment
+
+    the first 25 rows come from Latin Hypercube sampling.
+
+    the next 25 rows are manually-selected on the corners/boundary.
+
+    the remaining 25 are from another round of Latin Hypercube sampling.
+    """
+    )
+    return
 
 
 @app.cell
@@ -89,14 +108,20 @@ def _(box_dims, pd):
             'y_s': [14.0, 30.0, 28.0, 21.0, 16.0, 10.0, 4.0, 6.0, 18.0, 32.0, 19.0, 22.0, 26.0, 12.0,  8.0, 6.0, 11.0,29.0, 15.0, 3.0, 0.0, 1.0, 23.0, 23.0, 32.0,  0, 0,  0,  4,  0,  4,  4,  4,  0,  4,  4,  0,  0, 15, 20, 28, 32, 32, 32, 32, 32, 32, 29, 25, 25, 20.0, 10.0, 24.0, 11.0, 15.0, 30.0, 14.0, 32.0, 0.0 , 32.0, 9.0 , 13.0, 6.0 , 27.0, 29.0, 23.0, 10.0, 2.0 , 18.0, 27.0, 16.0, 1.0 , 17.0, 19.0, 8.0]
         }
     ) # note this is with origin in top left
-    df_source_locs["y_s"] = box_dims[1] - df_source_locs["y_s"]
+    df_source_locs["y_s"] = box_dims[1] - df_source_locs["y_s"] # accounts for coordinate system
     df_source_locs
     return (df_source_locs,)
 
 
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""## read in detector outputs""")
+    return
+
+
 @app.cell
 def _(csv, n_sensors, pd):
-    def read_csv(file_path):
+    def read_detector_outputs(file_path):
         with open(file_path, 'r') as file:
             csv_reader = csv.reader(file, delimiter=',')
             rows = []
@@ -121,7 +146,7 @@ def _(csv, n_sensors, pd):
             df = df[start:]
 
             return df
-    return (read_csv,)
+    return (read_detector_outputs,)
 
 
 @app.cell
@@ -137,7 +162,7 @@ def _():
 
 
 @app.cell
-def _(folder_path, n_expts, n_sensors, os, read_csv):
+def _(folder_path, n_expts, n_sensors, os, read_detector_outputs):
     def read_all_data(n_expts):
         dataframes = {}
 
@@ -146,7 +171,7 @@ def _(folder_path, n_expts, n_sensors, os, read_csv):
             file_path = os.path.join(folder_path, filename)
             print(f"\nReading {filename}...")
             # Use the filename (or file_path) as the key
-            dataframes[exp] = read_csv(file_path)
+            dataframes[exp] = read_detector_outputs(file_path)
 
             # unique sensors
             assert dataframes[exp]["SN"].nunique() == n_sensors
@@ -164,20 +189,32 @@ def _(dataframes):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""## assemble into an easier format for ML.""")
+    mo.md(
+        r"""
+    ## re-work data into an ML-friendly format
+
+    ::lucide:lightbulb:: source locations paired with sensor network response vectors
+
+    first, get list of sensors in the network
+    """
+    )
     return
 
 
 @app.cell
 def _(dataframes):
-    # list of sensors in the network
     sensors = dataframes[0]["SN"].unique()
     sensors
     return (sensors,)
 
 
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""next, from a sensor network response data frame, extract the count rate of a particular sensor.""")
+    return
+
+
 @app.function
-# from a sensor network response data frame, extract the count rate of a particular sensor.
 def grab_sensor_response(df, sensor):
     return float(df.loc[df["SN"] == sensor, "ICR"].item())
 
@@ -185,6 +222,19 @@ def grab_sensor_response(df, sensor):
 @app.cell
 def _(dataframes, sensors):
     grab_sensor_response(dataframes[0], sensors[2])
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(
+        r"""
+    🎯 goal: 
+
+    * each row is an experiment where we place the source at a location and observe the sensor network response
+    * the row lists the source location paired with the sensor response vector.
+    """
+    )
     return
 
 
@@ -202,7 +252,7 @@ def _(dataframes, df_source_locs, n_expts, pd, sensors):
 
     data = make_data_nice(dataframes, df_source_locs)
     data
-    return (data,)
+    return data, make_data_nice
 
 
 @app.cell
@@ -213,7 +263,13 @@ def _(dataframes, sensors):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""## viz""")
+    mo.md(
+        r"""
+    ## ::lucide:sailboat:: visually explore the data
+
+    first, where are the source locations over all experiments?
+    """
+    )
     return
 
 
@@ -234,8 +290,9 @@ def _(box_dims, data, plt):
     return
 
 
-@app.cell
-def _():
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""second, visualize the sensor readout and source location for a single experiment. """)
     return
 
 
@@ -282,9 +339,19 @@ def _(box_dims, data, plt, sensor_to_loc, sensors):
     return
 
 
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""the distribution of the detector responses over all experiments and correlations between them.""")
+    return
+
+
 @app.cell
-def _(data, sensors, sns):
-    sns.histplot(data[sensors])
+def _(data, plt, sensors, sns):
+    sns.swarmplot(data[sensors], size=2)
+    plt.axhline(13.2, linestyle="--", color="gray") # background
+    plt.yscale("log")
+    plt.xlabel("sensor")
+    plt.ylabel("response [cps]")
     return
 
 
@@ -295,83 +362,107 @@ def _(data, plt, sensors, sns):
     return
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""# ::icon-park:new-computer:: ML""")
+    mo.md(
+        r"""
+    # ::icon-park:new-computer:: ML
+
+    ML task: predict source location from sensor network response
+
+
+    **input**: 8D sensor network response
+
+    **output**: 2D source location
+    """
+    )
     return
 
 
 @app.cell
 def _(data):
-    data
+    data.shape
     return
 
 
 @app.cell
 def _(ExtraTreesRegressor, LeaveOneOut, np, sensors):
-    def do_loo_rf(data):
+    def do_loo_cv(data, n_estimators=100, verbose=False):
         data_loo = data.copy()
         data_loo["x_s_pred"] = np.zeros((len(data)))
         data_loo["y_s_pred"] = np.zeros((len(data)))
-        data_loo["ensemble pred source locs"] = [np.zeros(500) for _ in range(len(data_loo))]
+        data_loo["ensemble pred source locs"] = [np.zeros(n_estimators) for _ in range(len(data_loo))]
 
         loo = LeaveOneOut()
         for i, (train_index, test_index) in enumerate(loo.split(data_loo)):
-            print("fold :", i)
-            print("\ttest expt: ", test_index)
-            print("\ttrain expt: ", train_index)
+            print("fold :", i, " / ", data.shape[0])
+            if verbose:
+                print("\ttest expt: ", test_index)
+                print("\ttrain expt: ", train_index)
 
             # train a multi-output RF on the train data
             #  argument: fix x, move y and response v different.
             #  this RF maps sensor network readout to source location
-
-            print("\t\ttraining the RF.")
+            if verbose:
+                print("\t\ttraining the tree ensemble.")
             sensor_network_readout = data_loo.loc[train_index, sensors] # X_train
             source_locs = data_loo.loc[train_index, ["x_s", "y_s"]]     # y_train
-            rf = ExtraTreesRegressor(n_estimators=1000)
-            rf.fit(sensor_network_readout, source_locs)
+            tree_ensemble = ExtraTreesRegressor(n_estimators=n_estimators)
+            tree_ensemble.fit(sensor_network_readout, source_locs)
 
             # test RF
-            print("\t\ttesting the RF.")
+            if verbose:
+                print("\t\ttesting the tree ensemble.")
             sensor_network_readout_test = data_loo.loc[test_index, sensors] # X_test
-            source_locs_test_pred = rf.predict(sensor_network_readout_test)[0] # y_test (only one)
-
+            source_locs_test_pred = tree_ensemble.predict(sensor_network_readout_test)[0] # y_test (only one)
 
             # store LOO data
             data_loo.loc[test_index, "x_s_pred"] = source_locs_test_pred[0]
             data_loo.loc[test_index, "y_s_pred"] = source_locs_test_pred[1]
 
             # store UQ
-            for tree in rf.estimators_:
-                tree.feature_names_in_ = rf.feature_names_in_
-            data_loo.loc[test_index, "ensemble pred source locs"] = [np.array([
-                tree.predict(sensor_network_readout_test)[0] for tree in rf.estimators_
-            ])]
+            for tree in tree_ensemble.estimators_: # back to suppress warning
+                tree.feature_names_in_ = tree_ensemble.feature_names_in_
+            
+            data_loo.loc[test_index, "ensemble pred source locs"] = [
+                np.array(
+                    [tree.predict(sensor_network_readout_test)[0] for tree in tree_ensemble.estimators_]
+                )
+            ]
 
         # compute error = distance from true to predicted source
         data_loo["error"] = np.sqrt(
             (data_loo["x_s"] - data_loo["x_s_pred"]) ** 2 + (data_loo["y_s"] - data_loo["y_s_pred"]) ** 2
         )
-        return data_loo, rf
-    return (do_loo_rf,)
+    
+        return data_loo
+    return (do_loo_cv,)
 
 
 @app.cell
-def _(data):
-    data
+def _(mo):
+    run_loo_cv = mo.ui.checkbox(label="run LOO CV?")
+    run_loo_cv
+    return (run_loo_cv,)
+
+
+@app.cell
+def _(data, do_loo_cv, run_loo_cv):
+    if run_loo_cv.value:
+        data_loo = do_loo_cv(data)
+        data_loo
+    return (data_loo,)
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""analyze error := norm of true source location vector minus predicted source location vector.""")
     return
 
 
 @app.cell
-def _(data, do_loo_rf):
-    data_loo, rf = do_loo_rf(data)
-    data_loo
-    return data_loo, rf
-
-
-@app.cell
 def _(data_loo):
-    print("mean error: ", data_loo["error"].mean())
+    print("mean error: ", data_loo["error"].mean(), "in.")
     return
 
 
@@ -385,13 +476,19 @@ def _(data_loo, plt):
     return
 
 
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""parity plot over cross-validation procedure.""")
+    return
+
+
 @app.cell
 def _(box_dims, data_loo, plt):
-    f, (ax1, ax2) = plt.subplots(1, 2, sharey=True, sharex=True)
+    f, (ax1, ax2) = plt.subplots(1, 2)
     for ax in [ax1, ax2]:
         ax.set_aspect('equal', 'box')
-        ax.set_xlim(0, box_dims[0])
-        ax.set_ylim(0, box_dims[1])
+    ax1.set_xlim(0, box_dims[0])
+    ax2.set_xlim(0, box_dims[1])
     ax1.set_xlabel("x$_s$ [in]")
     ax2.set_xlabel("y$_s$ [in]")
     ax1.set_ylabel("predicted x$_s$ [in]")
@@ -400,9 +497,8 @@ def _(box_dims, data_loo, plt):
     ax1.plot([0, box_dims[0]], [0, box_dims[0]], color="black", linestyle="--")
     ax2.plot([0, box_dims[1]], [0, box_dims[1]], color="black", linestyle="--")
 
-    ax1.scatter(data_loo["x_s"], data_loo["x_s_pred"])
-    ax2.scatter(data_loo["y_s"], data_loo["y_s_pred"])
-
+    ax1.scatter(data_loo["x_s"], data_loo["x_s_pred"], clip_on=False)
+    ax2.scatter(data_loo["y_s"], data_loo["y_s_pred"], clip_on=False)
 
     plt.show()
     return
@@ -539,13 +635,27 @@ def _(data):
 
 
 @app.cell
-def _(data, do_loo_rf):
-    errors = []
+def _(mo):
+    run_learning_curve = mo.ui.checkbox(label="compute the learning curve?")
+    run_learning_curve
+    return (run_learning_curve,)
 
-    for i in range(2,len(data)):
-        data_loo_t, _ = do_loo_rf(data[0:i])
-        errors.append(data_loo_t["error"].mean())
-        print("mean error: ", data_loo_t["error"].mean())
+
+@app.cell
+def _(run_learning_curve):
+    run_learning_curve.value
+    return
+
+
+@app.cell
+def _(data, do_loo_rf, run_learning_curve):
+    if run_learning_curve.value:
+        errors = []
+    
+        for i in range(2,len(data)):
+            data_loo_t, _ = do_loo_rf(data[0:i])
+            errors.append(data_loo_t["error"].mean())
+            print("mean error: ", data_loo_t["error"].mean())
 
     return (errors,)
 
@@ -695,23 +805,7 @@ def _():
 
 
 @app.cell
-def _():
-    # sensor locs. orgigin is top left here.
-    sensor_to_loc = {
-        		"16518": [2, 3],
-    			"16520": [2, 18],
-    			"16519": [2, 27], 
-    			"16513": [14, 10],
-    			"16516": [21, 25],
-    			"16521": [26, 1],
-    			"16517": [38, 8],
-    			"16512": [40, 24]
-    }
-    return (sensor_to_loc,)
-
-
-@app.cell
-def _(folder_path, n_sensors, os, read_csv):
+def _(folder_path, n_sensors, os, read_detector_outputs):
     def read_tampering_data(n_expts, dets):
         tamp_data = {
             "12" : {},
@@ -720,18 +814,26 @@ def _(folder_path, n_sensors, os, read_csv):
         }
         for det in dets:
             for exp in range(1,n_expts+1):
-            
+
                 filename = f"det{det}_tamp{exp}.csv"
                 file_path = os.path.join(folder_path, filename)
                 print(f"\nReading {filename}...")
                 # Use the filename (or file_path) as the key
-                tamp_data[f"{det}"][exp] = read_csv(file_path)
-    
+                tamp_data[f"{det}"][exp] = read_detector_outputs(file_path)
+
             # unique sensors
             assert tamp_data[f"{det}"][exp]["SN"].nunique() == n_sensors
         return tamp_data
+    
     tampering_data = read_tampering_data(10,[12,13,19])
+    tampering_data
     return (tampering_data,)
+
+
+@app.cell
+def _(make_data_nice, tampering_data):
+    make_data_nice(tampering_data)
+    return
 
 
 @app.cell
