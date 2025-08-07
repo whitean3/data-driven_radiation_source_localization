@@ -374,14 +374,10 @@ def _(mo):
     **input**: 8D sensor network response
 
     **output**: 2D source location
+
+    ## leave-one-out cross validation
     """
     )
-    return
-
-
-@app.cell
-def _(data):
-    data.shape
     return
 
 
@@ -462,7 +458,19 @@ def _(mo):
 
 @app.cell
 def _(data_loo):
-    print("mean error: ", data_loo["error"].mean(), "in.")
+    mean_error = data_loo["error"].mean()
+    return (mean_error,)
+
+
+@app.cell
+def _(mean_error):
+    print("mean error: ", mean_error, "in.")
+    return
+
+
+@app.cell
+def _(box_dims, mean_error):
+    print("from area perspective: ", mean_error ** 2 / (box_dims[0] * box_dims[1]) * 100, "% error")
     return
 
 
@@ -485,6 +493,7 @@ def _(mo):
 @app.cell
 def _(box_dims, data_loo, plt):
     f, (ax1, ax2) = plt.subplots(1, 2)
+    plt.subplots_adjust(wspace=0.3)
     for ax in [ax1, ax2]:
         ax.set_aspect('equal', 'box')
     ax1.set_xlim(0, box_dims[0])
@@ -507,20 +516,21 @@ def _(box_dims, data_loo, plt):
 @app.cell
 def _(box_dims, data_loo, plt, sensor_to_loc, sensors):
     def explain_errors(data_loo):
-        plt.figure()
+        fig, ax = plt.subplots()
 
         # source locs. color by error.
         plt.scatter(
             data_loo["x_s"], data_loo["y_s"],
             c=data_loo["error"], vmin=0, vmax=data_loo["error"].max(),
-            clip_on=False, edgecolors="black"
+            clip_on=False, edgecolors="black", label="true source location"
         )
         plt.colorbar(label="error [in]")
 
         # show predicted locs
         plt.scatter(
             data_loo["x_s_pred"], data_loo["y_s_pred"],
-            clip_on=False, color="gray", alpha=0.3
+            clip_on=False, color="gray", alpha=0.3,
+            label="predicted source location"
         )
         for i in range(len(data_loo)):
             plt.plot(
@@ -534,7 +544,7 @@ def _(box_dims, data_loo, plt, sensor_to_loc, sensors):
         plt.scatter(
             [sensor_to_loc[sensor][0] for sensor in sensors],
             [sensor_to_loc[sensor][1] for sensor in sensors],
-            color="white", s=50, edgecolor="black", marker="s", label="sensor",
+            color="red", s=50, edgecolor="black", marker="s", label="sensor",
             clip_on=False
         )
 
@@ -545,6 +555,8 @@ def _(box_dims, data_loo, plt, sensor_to_loc, sensors):
         plt.ylabel("y [in]")
         plt.xlim(0, box_dims[0])
         plt.ylim(0, box_dims[1])
+
+        plt.legend(bbox_to_anchor=(1.3, 0.5), loc='upper left', borderaxespad=0)
         plt.show()
 
     explain_errors(data_loo)
@@ -599,26 +611,31 @@ def _(box_dims, data_loo, np, plt, sensor_to_loc, sensors):
 
 
 @app.cell
-def _():
-    # feature importance what sensor is most important?
+def _(mo):
+    mo.md(r"""### sensor importance""")
     return
 
 
 @app.cell
-def _(data):
-    data
-    return
+def _(ExtraTreesRegressor, sensors):
+    def train_tree_ensemble(data, n_estimators=100):
+        sensor_network_readout = data.loc[:, sensors] # X_train
+        source_locs = data.loc[:, ["x_s", "y_s"]]     # y_train
+        tree_ensemble = ExtraTreesRegressor(n_estimators=n_estimators)
+        tree_ensemble.fit(sensor_network_readout, source_locs)
+        return tree_ensemble
+    return (train_tree_ensemble,)
 
 
 @app.cell
-def _(box_dims):
-    box_dims
-    return
+def _(data, n_sensors, np, plt, sensors, train_tree_ensemble):
+    tree_ensemble = train_tree_ensemble(data)
 
-
-@app.cell
-def _(data_loo):
-    data_loo
+    plt.figure()
+    plt.xlabel("sensor")
+    plt.ylabel("feature importance")
+    plt.xticks(np.arange(n_sensors), sensors)
+    plt.bar(np.arange(n_sensors), tree_ensemble.feature_importances_)
     return
 
 
@@ -629,8 +646,8 @@ def _():
 
 
 @app.cell
-def _(data):
-    range(1,len(data))
+def _(mo):
+    mo.md(r"""## learning curve""")
     return
 
 
@@ -825,7 +842,7 @@ def _(folder_path, n_sensors, os, read_detector_outputs):
             assert tamp_data[f"{det}"][exp]["SN"].nunique() == n_sensors
         return tamp_data
     
-    tampering_data = read_tampering_data(10,[12,13,19])
+    tampering_data = read_tampering_data(10, [12,13,19])
     tampering_data
     return (tampering_data,)
 
