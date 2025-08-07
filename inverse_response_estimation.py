@@ -13,11 +13,23 @@ def _():
     import marimo as mo
     import matplotlib.pyplot as plt
     import seaborn as sns
+    import joblib
     from sklearn.ensemble import RandomForestRegressor, ExtraTreesRegressor
     from sklearn.model_selection import LeaveOneOut
     from sklearn.neighbors import KNeighborsRegressor
     from sklearn.preprocessing import StandardScaler
-    return ExtraTreesRegressor, LeaveOneOut, csv, mo, np, os, pd, plt, sns
+    return (
+        ExtraTreesRegressor,
+        LeaveOneOut,
+        csv,
+        joblib,
+        mo,
+        np,
+        os,
+        pd,
+        plt,
+        sns,
+    )
 
 
 @app.cell(hide_code=True)
@@ -266,7 +278,7 @@ def _(box_dims, data, plt, sensor_to_loc, sensors):
         plt.title(f"experiment {exp}")
         plt.show()
 
-    viz_sensor_readout(data, 4)
+    viz_sensor_readout(data, 19)
     return
 
 
@@ -340,7 +352,7 @@ def _(ExtraTreesRegressor, LeaveOneOut, np, sensors):
         data_loo["error"] = np.sqrt(
             (data_loo["x_s"] - data_loo["x_s_pred"]) ** 2 + (data_loo["y_s"] - data_loo["y_s_pred"]) ** 2
         )
-        return data_loo
+        return data_loo, rf
     return (do_loo_rf,)
 
 
@@ -352,9 +364,9 @@ def _(data):
 
 @app.cell
 def _(data, do_loo_rf):
-    data_loo = do_loo_rf(data)
+    data_loo, rf = do_loo_rf(data)
     data_loo
-    return (data_loo,)
+    return data_loo, rf
 
 
 @app.cell
@@ -521,7 +533,158 @@ def _():
 
 
 @app.cell
+def _(data):
+    range(1,len(data))
+    return
+
+
+@app.cell
+def _(data, do_loo_rf):
+    errors = []
+
+    for i in range(25,len(data)):
+        data_loo_t, _ = do_loo_rf(data[0:i])
+        errors.append(data_loo_t["error"].mean())
+        print("mean error: ", data_loo_t["error"].mean())
+
+    return (errors,)
+
+
+@app.cell
+def _(data_loo, errors):
+    errors.append(data_loo["error"].mean())
+    return
+
+
+@app.cell
+def _(errors):
+    errors
+    return
+
+
+@app.cell
 def _():
+    return
+
+
+@app.cell
+def _(errors, plt):
+    plt.figure()
+    plt.plot(list(range(25,51)), errors)
+    plt.gca().set_ylim(bottom=0)
+    plt.xlabel("# Samples")
+    plt.ylabel("Mean error (in)")
+
+    return
+
+
+@app.cell
+def _(joblib, rf):
+    joblib.dump(rf, 'random_forest_model.pkl')
+    return
+
+
+@app.cell
+def _(read_csv):
+    demo = read_csv(file_path="demo.csv")
+    return (demo,)
+
+
+@app.cell
+def _(demo):
+    demo
+    return
+
+
+@app.cell
+def _(dataframes):
+    demo_sensors = dataframes[0]["SN"].unique()
+    demo_sensors
+    return (demo_sensors,)
+
+
+@app.cell
+def _(demo):
+    demo_response = demo["ICR"]
+    demo_response
+    return (demo_response,)
+
+
+@app.cell
+def _(dataframes, demo_response, demo_sensors, pd):
+    def prep_demo_data(demo_sensors, demo_response):
+        demo_input = pd.DataFrame(columns=demo_sensors) 
+        new_row = {sensor : grab_sensor_response(dataframes[1], sensor) for sensor in demo_sensors}
+        demo_input.loc[1] = new_row
+        return demo_input
+
+
+    demo_input = prep_demo_data(demo_sensors, demo_response)
+    demo_input
+    return (demo_input,)
+
+
+@app.cell
+def _():
+    return
+
+
+@app.cell
+def _():
+    #demo_pred = rf.predict(demo_input)
+    #demo_pred
+    return
+
+
+@app.cell
+def _(demo_pred):
+    33.0-demo_pred[0][1]
+    return
+
+
+@app.cell
+def _(demo_input, rf):
+    demo_input.iloc[0, :] = [
+        29.812,
+    23.847,
+    51.884,
+    20.271,
+    32.2,
+    31.005,
+    19.077,
+    78.744,
+
+    
+    ]
+    demo_pred = rf.predict(demo_input)
+    demo_pred
+    return (demo_pred,)
+
+
+@app.cell
+def _(demo_pred):
+    33.0-demo_pred[0][1]
+
+    return
+
+
+@app.cell
+def _(demo_input):
+    demo_input
+    return
+
+
+@app.cell
+def _():
+    29.812
+    23.847
+    51.884
+    20.271
+    32.2
+    31.005
+    19.077
+    78.744
+
     return
 
 
