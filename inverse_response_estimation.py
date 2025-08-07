@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.14.9"
+__generated_with = "0.14.10"
 app = marimo.App(width="medium")
 
 
@@ -85,8 +85,8 @@ def _():
 def _(box_dims, pd):
     df_source_locs = pd.DataFrame(
         {
-            'x_s': [28.0, 38.0, 4.0, 2.0, 10.0, 41.0,32.0, 5.0, 40.0, 24.0, 16.0, 7.0, 18.0, 35.0, 33.0, 30.0, 23.0, 26.0, 19.0, 12.0, 0.0, 9.0, 21.0, 37.0, 14.0, 2, 5,  7,  7, 10, 10, 12, 16, 40, 41, 31, 31, 34, 41, 41, 41, 36, 28, 17, 12,  0,  7,  7,  7, 10, ],
-            'y_s': [14.0, 30.0, 28.0, 21.0, 16.0, 10.0, 4.0, 6.0, 18.0, 32.0, 19.0, 22.0, 26.0, 12.0,  8.0, 6.0, 11.0,29.0, 15.0, 3.0, 0.0, 1.0, 23.0, 23.0, 32.0,  0, 0,  0,  4,  0,  4,  4,  4,  0,  4,  4,  0,  0, 15, 20, 28, 32, 32, 32, 32, 32, 32, 29, 25, 25]
+            'x_s': [28.0, 38.0, 4.0, 2.0, 10.0, 41.0,32.0, 5.0, 40.0, 24.0, 16.0, 7.0, 18.0, 35.0, 33.0, 30.0, 23.0, 26.0, 19.0, 12.0, 0.0, 9.0, 21.0, 37.0, 14.0, 2, 5,  7,  7, 10, 10, 12, 16, 40, 41, 31, 31, 34, 41, 41, 41, 36, 28, 17, 12,  0,  7,  7,  7, 10, 13.0, 38.0, 41.0, 19.0,  7.0, 17.0, 39.0, 36.0,  9.0, 25.0, 32.0, 16.0,  6.0, 42.0,  0.0,  2.0, 26.0, 20.0, 28.0, 30.0,  3.0, 29.0, 14.0, 23.0, 22.0],
+            'y_s': [14.0, 30.0, 28.0, 21.0, 16.0, 10.0, 4.0, 6.0, 18.0, 32.0, 19.0, 22.0, 26.0, 12.0,  8.0, 6.0, 11.0,29.0, 15.0, 3.0, 0.0, 1.0, 23.0, 23.0, 32.0,  0, 0,  0,  4,  0,  4,  4,  4,  0,  4,  4,  0,  0, 15, 20, 28, 32, 32, 32, 32, 32, 32, 29, 25, 25, 20.0, 10.0, 24.0, 11.0, 15.0, 30.0, 14.0, 32.0, 0.0 , 32.0, 9.0 , 13.0, 6.0 , 27.0, 29.0, 23.0, 10.0, 2.0 , 18.0, 27.0, 16.0, 1.0 , 17.0, 19.0, 8.0]
         }
     ) # note this is with origin in top left
     df_source_locs["y_s"] = box_dims[1] - df_source_locs["y_s"]
@@ -132,7 +132,7 @@ def _():
 
 @app.cell
 def _():
-    n_expts = 50
+    n_expts = 75
     return (n_expts,)
 
 
@@ -542,7 +542,7 @@ def _(data):
 def _(data, do_loo_rf):
     errors = []
 
-    for i in range(25,len(data)):
+    for i in range(2,len(data)):
         data_loo_t, _ = do_loo_rf(data[0:i])
         errors.append(data_loo_t["error"].mean())
         print("mean error: ", data_loo_t["error"].mean())
@@ -570,7 +570,7 @@ def _():
 @app.cell
 def _(errors, plt):
     plt.figure()
-    plt.plot(list(range(25,51)), errors)
+    plt.plot(list(range(2,76)), errors)
     plt.gca().set_ylim(bottom=0)
     plt.xlabel("# Samples")
     plt.ylabel("Mean error (in)")
@@ -580,7 +580,7 @@ def _(errors, plt):
 
 @app.cell
 def _(joblib, rf):
-    joblib.dump(rf, 'random_forest_model.pkl')
+    joblib.dump(rf, 'random_forest_model_75s.pkl')
     return
 
 
@@ -654,7 +654,7 @@ def _(demo_input, rf):
     19.077,
     78.744,
 
-    
+
     ]
     demo_pred = rf.predict(demo_input)
     demo_pred
@@ -685,6 +685,63 @@ def _():
     19.077
     78.744
 
+    return
+
+
+@app.cell
+def _():
+    tampered_dets_SN = [16512,16513,16519]
+    return
+
+
+@app.cell
+def _():
+    # sensor locs. orgigin is top left here.
+    sensor_to_loc = {
+        		"16518": [2, 3],
+    			"16520": [2, 18],
+    			"16519": [2, 27], 
+    			"16513": [14, 10],
+    			"16516": [21, 25],
+    			"16521": [26, 1],
+    			"16517": [38, 8],
+    			"16512": [40, 24]
+    }
+    return (sensor_to_loc,)
+
+
+@app.cell
+def _(folder_path, n_sensors, os, read_csv):
+    def read_tampering_data(n_expts, dets):
+        tamp_data = {
+            "12" : {},
+            "13" : {},
+            "19" : {}
+        }
+        for det in dets:
+            for exp in range(1,n_expts+1):
+            
+                filename = f"det{det}_tamp{exp}.csv"
+                file_path = os.path.join(folder_path, filename)
+                print(f"\nReading {filename}...")
+                # Use the filename (or file_path) as the key
+                tamp_data[f"{det}"][exp] = read_csv(file_path)
+    
+            # unique sensors
+            assert tamp_data[f"{det}"][exp]["SN"].nunique() == n_sensors
+        return tamp_data
+    tampering_data = read_tampering_data(10,[12,13,19])
+    return (tampering_data,)
+
+
+@app.cell
+def _(tampering_data):
+    tampering_data
+    return
+
+
+@app.cell
+def _():
     return
 
 
