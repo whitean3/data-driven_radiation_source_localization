@@ -11,14 +11,51 @@ def _():
     import os
     import pandas as pd
     import marimo as mo
+
     import matplotlib.pyplot as plt
+    from matplotlib.patches import Ellipse
+    import matplotlib.transforms as transforms
+    import matplotlib.font_manager as fm
+    import matplotlib as mpl
     import seaborn as sns
-    import joblib
+    plt.style.use('rose-pine-dawn.mplstyle')
+    fm.fontManager.addfont("/Users/cokes/Library/Fonts/SourceCodePro-Regular.ttf")
+    plt.rcParams["font.family"] = "Source Code Pro"
+
     from sklearn.ensemble import RandomForestRegressor, ExtraTreesRegressor
     from sklearn.model_selection import LeaveOneOut
     from sklearn.neighbors import KNeighborsRegressor
     from sklearn.preprocessing import StandardScaler
-    return ExtraTreesRegressor, LeaveOneOut, csv, mo, np, os, pd, plt, sns
+    return (
+        Ellipse,
+        ExtraTreesRegressor,
+        LeaveOneOut,
+        csv,
+        mo,
+        np,
+        os,
+        pd,
+        plt,
+        sns,
+        transforms,
+    )
+
+
+@app.cell
+def _(sns):
+    # plot settings
+    theme_colors = sns.color_palette("Set2")
+    thing_to_color = {
+        'true source loc': theme_colors[3], 
+        'pred source loc': theme_colors[4], 
+        'sensor': theme_colors[2]
+    }
+    sensor_colormap = "Purples"
+
+    # theme_colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
+    # sns.color_palette(theme_colors)
+    sns.color_palette("Set2")
+    return sensor_colormap, theme_colors, thing_to_color
 
 
 @app.cell(hide_code=True)
@@ -263,10 +300,10 @@ def _(mo):
 
 
 @app.cell
-def _(box_dims, data, plt):
+def _(box_dims, data, plt, thing_to_color):
     def viz_source_locs(data):
         plt.figure()
-        plt.scatter(data["x_s"], data["y_s"], clip_on=False, color="red")
+        plt.scatter(data["x_s"], data["y_s"], clip_on=False, color=thing_to_color["true source loc"], s=65, marker="o")
         plt.gca().set_aspect('equal', 'box')
         plt.xlabel("x [in]")
         plt.ylabel("y [in]")
@@ -286,7 +323,15 @@ def _(mo):
 
 
 @app.cell
-def _(box_dims, data, plt, sensor_to_loc, sensors):
+def _(
+    box_dims,
+    data,
+    plt,
+    sensor_colormap,
+    sensor_to_loc,
+    sensors,
+    thing_to_color,
+):
     def viz_sensor_readout(data, exp):
         max_response = 75.0 # data.loc[exp, sensors].max()
 
@@ -303,15 +348,17 @@ def _(box_dims, data, plt, sensor_to_loc, sensors):
             edgecolor="black",
             vmin=0,
             marker="s",
-            vmax=max_response
+            vmax=max_response,
+            cmap=sensor_colormap,
+            label="sensor"
         )
 
         plt.colorbar(label="count rate [CPS]", extend="max")
 
         # plot source location
         plt.scatter(
-            data.loc[exp, "x_s"], data.loc[exp, "y_s"], marker="+", 
-            s=65, color="red", label="source location"
+            data.loc[exp, "x_s"], data.loc[exp, "y_s"], marker="o", 
+            s=65, color=thing_to_color["true source loc"], label="source location"
         )
 
         # TODO draw obstacles
@@ -322,6 +369,7 @@ def _(box_dims, data, plt, sensor_to_loc, sensors):
         plt.xlim(0, box_dims[0])
         plt.ylim(0, box_dims[1])
         plt.title(f"experiment {exp}")
+        plt.legend()
         plt.show()
 
     viz_sensor_readout(data, 19)
@@ -548,7 +596,7 @@ def _(box_dims, data_loo, plt):
 
 
 @app.cell
-def _(box_dims, data_loo, plt, sensor_to_loc, sensors):
+def _(box_dims, data_loo, plt, sensor_to_loc, sensors, thing_to_color):
     def explain_errors(data_loo):
         fig, ax = plt.subplots()
 
@@ -556,15 +604,18 @@ def _(box_dims, data_loo, plt, sensor_to_loc, sensors):
         plt.scatter(
             data_loo["x_s"], data_loo["y_s"],
             c=data_loo["error"], vmin=0, vmax=data_loo["error"].max(),
-            clip_on=False, edgecolors="black", label="true source location"
+            marker="o", 
+            s=65,
+            clip_on=False, edgecolors="black", label="true\nsource location",
+            cmap="Reds"
         )
         plt.colorbar(label="error [in]")
 
         # show predicted locs
         plt.scatter(
-            data_loo["x_s_pred"], data_loo["y_s_pred"],
-            clip_on=False, color="gray", alpha=0.3,
-            label="predicted source location"
+            data_loo["x_s_pred"], data_loo["y_s_pred"], s=65, marker="+",
+            clip_on=False, color=thing_to_color["pred source loc"],
+            label="predicted\nsource location"
         )
         for i in range(len(data_loo)):
             plt.plot(
@@ -578,7 +629,7 @@ def _(box_dims, data_loo, plt, sensor_to_loc, sensors):
         plt.scatter(
             [sensor_to_loc[sensor][0] for sensor in sensors],
             [sensor_to_loc[sensor][1] for sensor in sensors],
-            color="red", s=50, edgecolor="black", marker="s", label="sensor",
+            color=thing_to_color["sensor"], s=50, edgecolor="black", marker="s", label="sensor",
             clip_on=False
         )
 
@@ -600,7 +651,7 @@ def _(box_dims, data_loo, plt, sensor_to_loc, sensors):
 @app.cell
 def _(Ellipse, np, transforms):
     # from https://matplotlib.org/stable/gallery/statistics/confidence_ellipse.html
-    def draw_confidence_ellipse(x, y, ax, n_std=3.0, facecolor='none', **kwargs):
+    def draw_confidence_ellipse(x, y, ax, n_std=1.0, facecolor='none', **kwargs):
         if x.size != y.size:
             raise ValueError("x and y must be the same size")
 
@@ -630,46 +681,66 @@ def _(Ellipse, np, transforms):
 
         ellipse.set_transform(transf + ax.transData)
         return ax.add_patch(ellipse)
-    return
+    return (draw_confidence_ellipse,)
 
 
 @app.cell
-def _(box_dims, data_loo, np, plt, sensor_to_loc, sensors):
-    def viz_prediction(data_loo, exp, n_samples=25):
+def _(
+    box_dims,
+    data_loo,
+    draw_confidence_ellipse,
+    np,
+    plt,
+    sensor_colormap,
+    sensor_to_loc,
+    sensors,
+    theme_colors,
+    thing_to_color,
+):
+    def viz_prediction(data_loo, exp, n_samples=25, incl_ellipse=True):
         max_response = 75.0 
 
-        plt.figure()
-
+        fig, ax = plt.subplots()
+        ax.set_aspect('equal', 'box')
         # source locs. color by error.
         plt.scatter(
             data_loo.loc[exp, "x_s"], data_loo.loc[exp, "y_s"],
-            clip_on=False, edgecolors="black", color="red"
+            clip_on=False, edgecolors="black", color=theme_colors[4],
+            s=65, marker="o",
+            label="true\nsource location"
         )
 
         # plot sensors
         plt.scatter(
             [sensor_to_loc[sensor][0] for sensor in sensors],
             [sensor_to_loc[sensor][1] for sensor in sensors],
-            s=50, edgecolor="black", marker="s", label="sensor",
+            s=50, edgecolor="black", marker="s",
             clip_on=False,
             c=[data_loo.loc[exp, sensor] for sensor in sensors],
             vmin=0,
-            vmax=max_response
+            vmax=max_response,
+            label="sensor",
+            cmap=sensor_colormap
         )
 
         plt.colorbar(label="count rate [CPS]", extend="max")
 
-        # plot samples of predicted responses
+        # viz uncertainty quantification by looking at whole ensemble.
+        xs_preds = np.array([xs[0] for xs in data_loo.loc[exp, "ensemble pred source locs"]])
+        ys_preds = np.array([xs[1] for xs in data_loo.loc[exp, "ensemble pred source locs"]])
         if n_samples > 0:
-            ids_trees = np.random.choice(np.arange(len(data_loo.loc[exp, "ensemble pred source locs"])), n_samples)
+            # plot samples of predicted responses
+            ids_trees = np.random.choice(np.arange(len(xs_preds)), n_samples)
             plt.scatter(
-                [xs[0] for xs in data_loo.loc[exp, "ensemble pred source locs"][ids_trees]],
-                [xs[1] for xs in data_loo.loc[exp, "ensemble pred source locs"][ids_trees]],
-                marker="+", color="gray"
+                xs_preds[ids_trees],
+                ys_preds[ids_trees],
+                marker="+", color=thing_to_color["pred source loc"], 
+                s=65,
+                label="predicted\nsource location"
             )
 
-        # plot confidence ellipse
-        # draw_confidence_ellipse()
+        if incl_ellipse:
+            draw_confidence_ellipse(xs_preds, ys_preds, ax, facecolor=thing_to_color["pred source loc"], alpha=0.2)
 
         # plot obstacles TODO
 
@@ -678,9 +749,12 @@ def _(box_dims, data_loo, np, plt, sensor_to_loc, sensors):
         plt.ylabel("y [in]")
         plt.xlim(0, box_dims[0])
         plt.ylim(0, box_dims[1])
+
+        plt.legend(bbox_to_anchor=(1.3, 0.5), loc='upper left', borderaxespad=0)
+    
         plt.show()
 
-    _exp = 45
+    _exp = 5
     viz_prediction(data_loo, _exp, n_samples=25)
     return
 
@@ -714,7 +788,7 @@ def _(data, n_sensors, np, plt, sensors, train_tree_ensemble):
     return
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""## learning curve""")
     return
@@ -766,7 +840,7 @@ def _(learning_curve, plt):
     return
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""## live demo-ing""")
     return
