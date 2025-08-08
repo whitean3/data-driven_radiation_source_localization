@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.14.9"
+__generated_with = "0.14.16"
 app = marimo.App(width="medium")
 
 
@@ -31,7 +31,7 @@ def _(mo):
     * `SN` gives sensor network ID
     * `ICR` gives count rate
     * the list of source locations are below.
-  
+
     ## locations of detectors in the environment
     """
     )
@@ -281,7 +281,7 @@ def _(box_dims, data, plt):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""second, visualize the sensor readout and source location for a single experiment. """)
+    mo.md(r"""second, visualize the sensor readout and source location for a single experiment.""")
     return
 
 
@@ -330,7 +330,7 @@ def _(box_dims, data, plt, sensor_to_loc, sensors):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""the distribution of the detector responses over all experiments and correlations between them.""")
+    mo.md(r"""the distribution of the detector responses over all experiments and correlations between them. use a log scale.""")
     return
 
 
@@ -340,13 +340,17 @@ def _(data, plt, sensors, sns):
     plt.axhline(13.2, linestyle="--", color="gray") # background
     plt.yscale("log")
     plt.xlabel("sensor")
-    plt.ylabel("response [cps]")
+    plt.ylabel("response [CPS]")
     return
 
 
 @app.cell
 def _(data, plt, sensors, sns):
-    g = sns.pairplot(data[sensors])
+    _g = sns.pairplot(data[sensors], corner=True)
+    for _ax in _g.axes.flat:
+        if not _ax == None:
+            _ax.set_xscale('log')
+            _ax.set_yscale('log')
     plt.show()
     return
 
@@ -370,75 +374,97 @@ def _(mo):
     return
 
 
+@app.cell(hide_code=True)
+def _(mo):
+    mo.mermaid(
+        """
+        flowchart LR
+            B[tree ensemble]
+            direction LR
+            a1[ ] -.-|"sensor network response vector"| B
+            B -.-|"source location"| a2[ ]
+            style a1 fill:none, stroke:none
+            style a2 fill:none, stroke:none
+        """
+    )
+    return
+
+
 @app.cell
 def _(ExtraTreesRegressor, LeaveOneOut, np, sensors):
+    # a multi-output tree ensemble model. maps 8D vectors to 2D vectors.
+    #  maps sensor network readout to source location
     def do_loo_cv(data, n_estimators=100, verbose=True, very_verbose=False):
         data_loo = data.copy()
+        # store predicted source locations in data frame.
+        #  ok bc each data point is test point ONCE.
         data_loo["x_s_pred"] = np.zeros((len(data)))
         data_loo["y_s_pred"] = np.zeros((len(data)))
         data_loo["ensemble pred source locs"] = [np.zeros(n_estimators) for _ in range(len(data_loo))]
 
         loo = LeaveOneOut()
         for i, (train_index, test_index) in enumerate(loo.split(data_loo)):
+            assert test_index.size == 1
             if verbose:
                 print("fold :", i, " / ", data.shape[0])
-            if very_verbose:
-                print("\ttest expt: ", test_index)
-                print("\ttrain expt: ", train_index)
+            
+                if very_verbose:
+                    print("\ttest expt: ", test_index)
+                    print("\ttrain expt: ", train_index)
+                    print("\t\ttraining the tree ensemble.")
 
-            # train a multi-output RF on the train data
-            #  argument: fix x, move y and response v different.
-            #  this RF maps sensor network readout to source location
-            if very_verbose:
-                print("\t\ttraining the tree ensemble.")
-            sensor_network_readout = data_loo.loc[train_index, sensors] # X_train
-            source_locs = data_loo.loc[train_index, ["x_s", "y_s"]]     # y_train
+            # build X_train, y_train
+            sensor_network_readout = data_loo.loc[train_index, sensors]
+            source_locs = data_loo.loc[train_index, ["x_s", "y_s"]]
+
+            # train tree ensemble on training data
             tree_ensemble = ExtraTreesRegressor(n_estimators=n_estimators)
             tree_ensemble.fit(sensor_network_readout, source_locs)
 
-            # test RF
+            # test tree ensemble on test data
+            # first, build X_test, y_test
             if very_verbose:
                 print("\t\ttesting the tree ensemble.")
-            sensor_network_readout_test = data_loo.loc[test_index, sensors] # X_test
-            source_locs_test_pred = tree_ensemble.predict(sensor_network_readout_test)[0] # y_test (only one)
+            sensor_network_readout_test = data_loo.loc[test_index, sensors]
+            source_locs_test_pred = tree_ensemble.predict(sensor_network_readout_test)[0]
 
-            # store LOO data
+            # store prediction of source location on test network readout.
             data_loo.loc[test_index, "x_s_pred"] = source_locs_test_pred[0]
             data_loo.loc[test_index, "y_s_pred"] = source_locs_test_pred[1]
 
-            # store UQ
+            # also store predictions by each tree for UQ
             for tree in tree_ensemble.estimators_: # back to suppress warning
                 tree.feature_names_in_ = tree_ensemble.feature_names_in_
-            
+
             data_loo.loc[test_index, "ensemble pred source locs"] = [
                 np.array(
                     [tree.predict(sensor_network_readout_test)[0] for tree in tree_ensemble.estimators_]
                 )
             ]
 
-        # compute error = distance from true to predicted source
+        # DONE! compute and store error = distance from true to predicted source
         data_loo["error_x"] = np.abs(data_loo["x_s"] - data_loo["x_s_pred"])
         data_loo["error_y"] = np.abs(data_loo["y_s"] - data_loo["y_s_pred"])
         data_loo["error"] = np.sqrt(
             (data_loo["x_s"] - data_loo["x_s_pred"]) ** 2 + (data_loo["y_s"] - data_loo["y_s_pred"]) ** 2
         )
-    
+
         return data_loo
     return (do_loo_cv,)
 
 
 @app.cell
-def _(mo):
-    run_loo_cv = mo.ui.checkbox(label="run LOO CV?")
+def _(run_loo_cv):
+    #run_loo_cv = mo.ui.checkbox(label="run LOO CV?")
     run_loo_cv
-    return (run_loo_cv,)
+    return
 
 
 @app.cell
 def _(data, do_loo_cv, run_loo_cv):
     if run_loo_cv.value:
         data_loo = do_loo_cv(data)
-        data_loo
+    data_loo
     return (data_loo,)
 
 
@@ -472,6 +498,7 @@ def _(data_loo, plt):
     plt.hist(data_loo["error"])
     plt.xlabel("error [in]")
     plt.ylabel("# experiments")
+    plt.title("LOO-CV error")
     plt.show()
     return
 
@@ -488,8 +515,18 @@ def _(box_dims, data_loo, plt):
     plt.subplots_adjust(wspace=0.3)
     for ax in [ax1, ax2]:
         ax.set_aspect('equal', 'box')
+    
     ax1.set_xlim(0, box_dims[0])
+    ax1.set_ylim(0, box_dims[0])
     ax2.set_xlim(0, box_dims[1])
+    ax2.set_ylim(0, box_dims[1])
+
+    ax1.set_xticks([0, 10, 20, 30, 40])
+    ax1.set_yticks([0, 10, 20, 30, 40])
+
+    ax2.set_xticks([0, 5, 10, 15, 20, 25, 30])
+    ax2.set_yticks([0, 5, 10, 15, 20, 25, 30])
+
     ax1.set_xlabel("x$_s$ [in]")
     ax2.set_xlabel("y$_s$ [in]")
     ax1.set_ylabel("predicted x$_s$ [in]")
@@ -561,8 +598,44 @@ def _(box_dims, data_loo, plt, sensor_to_loc, sensors):
 
 
 @app.cell
+def _(Ellipse, np, transforms):
+    # from https://matplotlib.org/stable/gallery/statistics/confidence_ellipse.html
+    def draw_confidence_ellipse(x, y, ax, n_std=3.0, facecolor='none', **kwargs):
+        if x.size != y.size:
+            raise ValueError("x and y must be the same size")
+
+        cov = np.cov(x, y)
+        pearson = cov[0, 1]/np.sqrt(cov[0, 0] * cov[1, 1])
+        # Using a special case to obtain the eigenvalues of this
+        # two-dimensional dataset.
+        ell_radius_x = np.sqrt(1 + pearson)
+        ell_radius_y = np.sqrt(1 - pearson)
+        ellipse = Ellipse((0, 0), width=ell_radius_x * 2, height=ell_radius_y * 2,
+                          facecolor=facecolor, **kwargs)
+
+        # Calculating the standard deviation of x from
+        # the squareroot of the variance and multiplying
+        # with the given number of standard deviations.
+        scale_x = np.sqrt(cov[0, 0]) * n_std
+        mean_x = np.mean(x)
+
+        # calculating the standard deviation of y ...
+        scale_y = np.sqrt(cov[1, 1]) * n_std
+        mean_y = np.mean(y)
+
+        transf = transforms.Affine2D() \
+            .rotate_deg(45) \
+            .scale(scale_x, scale_y) \
+            .translate(mean_x, mean_y)
+
+        ellipse.set_transform(transf + ax.transData)
+        return ax.add_patch(ellipse)
+    return
+
+
+@app.cell
 def _(box_dims, data_loo, np, plt, sensor_to_loc, sensors):
-    def viz_prediction(data_loo, exp):
+    def viz_prediction(data_loo, exp, n_samples=25):
         max_response = 75.0 
 
         plt.figure()
@@ -586,13 +659,17 @@ def _(box_dims, data_loo, np, plt, sensor_to_loc, sensors):
 
         plt.colorbar(label="count rate [CPS]", extend="max")
 
-        # plot predicted responses
-        n_samples = 25
-        plt.scatter(
-            np.random.choice([xs[0] for xs in data_loo.loc[exp, "ensemble pred source locs"]], n_samples),
-            np.random.choice([xs[1] for xs in data_loo.loc[exp, "ensemble pred source locs"]], n_samples),
-            marker="+", color="gray"
-        )
+        # plot samples of predicted responses
+        if n_samples > 0:
+            ids_trees = np.random.choice(np.arange(len(data_loo.loc[exp, "ensemble pred source locs"])), n_samples)
+            plt.scatter(
+                [xs[0] for xs in data_loo.loc[exp, "ensemble pred source locs"][ids_trees]],
+                [xs[1] for xs in data_loo.loc[exp, "ensemble pred source locs"][ids_trees]],
+                marker="+", color="gray"
+            )
+
+        # plot confidence ellipse
+        # draw_confidence_ellipse()
 
         # plot obstacles TODO
 
@@ -603,7 +680,8 @@ def _(box_dims, data_loo, np, plt, sensor_to_loc, sensors):
         plt.ylim(0, box_dims[1])
         plt.show()
 
-    viz_prediction(data_loo, 45)
+    _exp = 45
+    viz_prediction(data_loo, _exp, n_samples=25)
     return
 
 
@@ -653,10 +731,10 @@ def _(mo):
 def _(data, do_loo_cv, np, pd, run_learning_curve):
     if run_learning_curve.value:
         n_repeats = 3
-    
+
         nb_datas = [5 * i for i in range(1, 16)]
         assert nb_datas[-1] <= len(data)
-    
+
         loo_errors_mu  = []
         loo_errors_std = []
         for nb_data in nb_datas:
@@ -817,7 +895,7 @@ def _(folder_path, n_sensors, os, read_detector_outputs):
             # unique sensors
             assert tamp_data[f"{det}"][exp]["SN"].nunique() == n_sensors
         return tamp_data
-    
+
     tampering_data = read_tampering_data(10, [12,13,19])
     tampering_data
     return (tampering_data,)
