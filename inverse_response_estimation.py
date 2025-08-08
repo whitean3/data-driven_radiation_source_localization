@@ -707,7 +707,7 @@ def _(
             data_loo.loc[exp, "x_s"], data_loo.loc[exp, "y_s"],
             clip_on=False, edgecolors="black", color=theme_colors[4],
             s=65, marker="o",
-            label="true\nsource location"
+            label="true\nsource\nlocation"
         )
 
         # plot sensors
@@ -736,7 +736,7 @@ def _(
                 ys_preds[ids_trees],
                 marker="+", color=thing_to_color["pred source loc"], 
                 s=65,
-                label="predicted\nsource location"
+                label="predicted\nsource\nlocation\nsample", clip_on=False
             )
 
         if incl_ellipse:
@@ -754,8 +754,8 @@ def _(
     
         plt.show()
 
-    _exp = 5
-    viz_prediction(data_loo, _exp, n_samples=25)
+    _exp = 6
+    viz_prediction(data_loo, _exp, n_samples=10)
     return
 
 
@@ -836,6 +836,7 @@ def _(learning_curve, plt):
         yerr=learning_curve["loo error std [in]"], marker="s"
     )
     plt.title("learning curve")
+    plt.ylim(ymin=0)
     plt.show()
     return
 
