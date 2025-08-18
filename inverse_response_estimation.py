@@ -23,13 +23,14 @@ def _():
     fm.fontManager.addfont("SourceCodePro-Regular.ttf") # https://fonts.google.com/specimen/Source+Code+Pro
     plt.rcParams["font.family"] = "Source Code Pro"
 
-    from sklearn.ensemble import ExtraTreesClassifier, ExtraTreesRegressor
-    from sklearn.model_selection import LeaveOneOut
+    from sklearn.ensemble import ExtraTreesClassifier, ExtraTreesRegressor, IsolationForest
+    from sklearn.model_selection import LeaveOneOut, train_test_split
     return (
         ConfusionMatrixDisplay,
         Ellipse,
         ExtraTreesClassifier,
         ExtraTreesRegressor,
+        IsolationForest,
         LeaveOneOut,
         csv,
         mo,
@@ -38,6 +39,7 @@ def _():
         pd,
         plt,
         sns,
+        train_test_split,
         transforms,
     )
 
@@ -1019,14 +1021,51 @@ def _(folder_path, n_sensors, os, read_detector_outputs):
             assert tamp_data[f"{det}"][exp]["SN"].nunique() == n_sensors
         return tamp_data
 
-    tampering_data = read_tampering_data(10, [12,13,19])
-    tampering_data
-    return (tampering_data,)
+    raw_tampering_data = read_tampering_data(10, [12,13,19])
+    raw_tampering_data
+    return (raw_tampering_data,)
 
 
 @app.cell
-def _(tampering_data):
-    tampering_data
+def _(raw_tampering_data):
+    raw_tampering_data
+    return
+
+
+@app.cell
+def _(mo):
+    mo.md(r"""train isolation forest on normal data.""")
+    return
+
+
+@app.cell
+def _(IsolationForest, plt, sensors, train_test_split):
+    def train_test_anomaly_detection(data, raw_tampering_data):
+        # split normal data into train and tes
+        data_train, data_test = train_test_split(data, test_size=0.25)
+    
+        iso_f = IsolationForest()
+        iso_f.fit(data_train[sensors])
+
+        ascore_normal = iso_f.decision_function(data_test[sensors])
+
+        plt.figure()
+        plt.xlabel("anomaly score")
+        plt.hist(ascore_normal, label="normal")
+        plt.legend()
+        plt.show()
+    return (train_test_anomaly_detection,)
+
+
+@app.cell
+def _(data, train_test_anomaly_detection):
+    train_test_anomaly_detection(data, data)
+    return
+
+
+@app.cell
+def _(data, train_test_split):
+    train_test_split(data)
     return
 
 
