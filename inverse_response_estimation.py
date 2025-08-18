@@ -984,6 +984,10 @@ def _(ConfusionMatrixDisplay, data_loo_c, plt):
         data_loo_c["safe"].values, data_loo_c["pred_safe"].values,
         text_kw={'fontsize': 22}
     )
+    cm.ax_.tick_params(axis='x', labelsize=22)
+    cm.ax_.tick_params(axis='y', labelsize=22)
+    cm.ax_.set_xlabel('Predicted label', fontsize=20)
+    cm.ax_.set_ylabel('True label', fontsize=20)
     plt.show()
     return
 
