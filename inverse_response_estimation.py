@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.14.16"
+__generated_with = "0.14.9"
 app = marimo.App(width="medium")
 
 
@@ -18,8 +18,8 @@ def _():
     import matplotlib.font_manager as fm
     import matplotlib as mpl
     import seaborn as sns
-    plt.style.use('rose-pine-dawn.mplstyle')
-    fm.fontManager.addfont("/Users/cokes/Library/Fonts/SourceCodePro-Regular.ttf")
+    plt.style.use('rose-pine-dawn.mplstyle') # https://github.com/h4pZ/rose-pine-matplotlib/tree/main/themes
+    fm.fontManager.addfont("SourceCodePro-Regular.ttf") # https://fonts.google.com/specimen/Source+Code+Pro
     plt.rcParams["font.family"] = "Source Code Pro"
 
     from sklearn.ensemble import RandomForestRegressor, ExtraTreesRegressor
@@ -455,7 +455,7 @@ def _(ExtraTreesRegressor, LeaveOneOut, np, sensors):
             assert test_index.size == 1
             if verbose:
                 print("fold :", i, " / ", data.shape[0])
-            
+
                 if very_verbose:
                     print("\ttest expt: ", test_index)
                     print("\ttrain expt: ", train_index)
@@ -563,7 +563,7 @@ def _(box_dims, data_loo, plt):
     plt.subplots_adjust(wspace=0.3)
     for ax in [ax1, ax2]:
         ax.set_aspect('equal', 'box')
-    
+
     ax1.set_xlim(0, box_dims[0])
     ax1.set_ylim(0, box_dims[0])
     ax2.set_xlim(0, box_dims[1])
@@ -751,7 +751,7 @@ def _(
         plt.ylim(0, box_dims[1])
 
         plt.legend(bbox_to_anchor=(1.3, 0.5), loc='upper left', borderaxespad=0)
-    
+
         plt.show()
 
     _exp = 6
@@ -976,19 +976,19 @@ def _(background_data, pd):
     def reshape_bkg_data(data):
         # Convert ICR to numeric first, then group and apply list
         reshaped_dict = data.groupby('SN')['ICR'].apply(lambda x: pd.to_numeric(x, errors='coerce').tolist()).to_dict()
-    
+
         # Sum every 6 values for each SN
         summed_dict = {}
         for sn, icr_values in reshaped_dict.items():
             # Reshape into groups of 6 and sum each group
             grouped = [sum(icr_values[i:i+6])/60 for i in range(0, len(icr_values), 6)]
             summed_dict[sn] = grouped
-    
+
         reshaped_df = pd.DataFrame.from_dict(summed_dict, orient='index').T
         return reshaped_df
     bkg_cpm = reshape_bkg_data(background_data)
     bkg_cpm
-    return (bkg_cpm,)
+    return
 
 
 @app.cell
