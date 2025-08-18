@@ -939,6 +939,59 @@ def _(mo):
 
 
 @app.cell
+def _(csv, folder_path, os, pd):
+    def read_background_data():
+        bgk_df = {}
+        filename = "background_shielding_model.csv"
+        file_path = os.path.join(folder_path, filename)
+        print(f"\nReading {filename}...")
+        # Use the filename (or file_path) as the key
+        with open(file_path, 'r') as file:
+            csv_reader = csv.reader(file, delimiter=',')
+            rows = []
+            header = next(csv_reader)  # Read header separately
+
+            # Create new header: keep first 6 columns and remove the rest
+            new_header = header[:6]
+
+            for row in csv_reader:
+                if row[1] != '':
+                    # Take first 5 columns as is
+                    new_row = row[:6]
+                    # Convert columns 6 through 1029 into a vector and store in 6th position
+                    vector = [float(x) for x in row[5:1029]]
+                    new_row[5] = vector
+                    rows.append(new_row)
+
+        bkg_df = pd.DataFrame(rows, columns=new_header)
+        return bkg_df
+
+    background_data = read_background_data()
+    background_data
+    return (background_data,)
+
+
+@app.cell
+def _(background_data, pd):
+    def reshape_bkg_data(data):
+        # Convert ICR to numeric first, then group and apply list
+        reshaped_dict = data.groupby('SN')['ICR'].apply(lambda x: pd.to_numeric(x, errors='coerce').tolist()).to_dict()
+    
+        # Sum every 6 values for each SN
+        summed_dict = {}
+        for sn, icr_values in reshaped_dict.items():
+            # Reshape into groups of 6 and sum each group
+            grouped = [sum(icr_values[i:i+6])/60 for i in range(0, len(icr_values), 6)]
+            summed_dict[sn] = grouped
+    
+        reshaped_df = pd.DataFrame.from_dict(summed_dict, orient='index').T
+        return reshaped_df
+    bkg_cpm = reshape_bkg_data(background_data)
+    bkg_cpm
+    return (bkg_cpm,)
+
+
+@app.cell
 def _(mo):
     mo.md(r"""# sensor tampering data""")
     return
