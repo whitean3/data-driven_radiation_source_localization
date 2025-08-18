@@ -16,6 +16,7 @@ def _():
     from matplotlib.patches import Ellipse
     import matplotlib.transforms as transforms
     import matplotlib.font_manager as fm
+    from sklearn.metrics import ConfusionMatrixDisplay
     import matplotlib as mpl
     import seaborn as sns
     plt.style.use('rose-pine-dawn.mplstyle') # https://github.com/h4pZ/rose-pine-matplotlib/tree/main/themes
@@ -25,6 +26,7 @@ def _():
     from sklearn.ensemble import ExtraTreesClassifier, ExtraTreesRegressor
     from sklearn.model_selection import LeaveOneOut
     return (
+        ConfusionMatrixDisplay,
         Ellipse,
         ExtraTreesClassifier,
         ExtraTreesRegressor,
@@ -915,15 +917,9 @@ def _(data, data_bkg, np, pd):
         ]
     )
     data_c.reset_index(inplace=True)
-    data_c["safe"] = ~ np.isnan(data_c["x_s"])
+    data_c["safe"] = data_c["x_s"].map(lambda x_s : "safe" if np.isnan(x_s) else "not safe")
     data_c
     return (data_c,)
-
-
-@app.cell
-def _(sensors):
-    sensors
-    return
 
 
 @app.cell
@@ -934,7 +930,7 @@ def _(ExtraTreesClassifier, LeaveOneOut, data, np, sensors):
         data_loo = data_c.copy()
         # store predicted source locations in data frame.
         #  ok bc each data point is test point ONCE.
-        data_loo["safety_pred"] = np.zeros((len(data_c)))
+        data_loo["pred_safe"] = np.zeros((len(data_c)))
 
         loo = LeaveOneOut()
         for i, (train_index, test_index) in enumerate(loo.split(data_loo)):
@@ -963,15 +959,32 @@ def _(ExtraTreesClassifier, LeaveOneOut, data, np, sensors):
             safety_pred = tree_ensemble.predict(sensor_network_readout_test)[0]
 
             # store prediction on test network readout.
-            data_loo.loc[test_index, "safety_pred"] = safety_pred
+            data_loo.loc[test_index, "pred_safe"] = safety_pred
 
         return data_loo
     return (do_loo_cv_classification,)
 
 
 @app.cell
+def _(data_loo_c):
+    data_loo_c["pred_safe"]
+    return
+
+
+@app.cell
 def _(data_c, do_loo_cv_classification):
     data_loo_c = do_loo_cv_classification(data_c)
+    data_loo_c
+    return (data_loo_c,)
+
+
+@app.cell
+def _(ConfusionMatrixDisplay, data_loo_c, plt):
+    cm = ConfusionMatrixDisplay.from_predictions(
+        data_loo_c["safe"].values, data_loo_c["pred_safe"].values,
+        text_kw={'fontsize': 22}
+    )
+    plt.show()
     return
 
 
