@@ -22,12 +22,11 @@ def _():
     fm.fontManager.addfont("SourceCodePro-Regular.ttf") # https://fonts.google.com/specimen/Source+Code+Pro
     plt.rcParams["font.family"] = "Source Code Pro"
 
-    from sklearn.ensemble import RandomForestRegressor, ExtraTreesRegressor
+    from sklearn.ensemble import ExtraTreesClassifier, ExtraTreesRegressor
     from sklearn.model_selection import LeaveOneOut
-    from sklearn.neighbors import KNeighborsRegressor
-    from sklearn.preprocessing import StandardScaler
     return (
         Ellipse,
+        ExtraTreesClassifier,
         ExtraTreesRegressor,
         LeaveOneOut,
         csv,
@@ -794,7 +793,7 @@ def _(mo):
     return
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(mo):
     run_learning_curve = mo.ui.checkbox(label="compute the learning curve?")
     run_learning_curve
@@ -820,24 +819,26 @@ def _(data, do_loo_cv, np, pd, run_learning_curve):
             loo_errors_mu.append(np.mean(loo_errors))
             loo_errors_std.append(np.std(loo_errors))
 
-    learning_curve = pd.DataFrame(
-        {"# data": nb_datas, "loo error [in]": loo_errors_mu, "loo error std [in]": loo_errors_std}
-    )
+    if run_learning_curve.value:
+        learning_curve = pd.DataFrame(
+            {"# data": nb_datas, "loo error [in]": loo_errors_mu, "loo error std [in]": loo_errors_std}
+        )
     return (learning_curve,)
 
 
 @app.cell
-def _(learning_curve, plt):
-    plt.figure()
-    plt.xlabel("# data")
-    plt.ylabel("LOO error [in]")
-    plt.errorbar(
-        learning_curve["# data"], learning_curve["loo error [in]"], 
-        yerr=learning_curve["loo error std [in]"], marker="s"
-    )
-    plt.title("learning curve")
-    plt.ylim(ymin=0)
-    plt.show()
+def _(learning_curve, plt, run_learning_curve):
+    if run_learning_curve.value:
+        plt.figure()
+        plt.xlabel("# data")
+        plt.ylabel("LOO error [in]")
+        plt.errorbar(
+            learning_curve["# data"], learning_curve["loo error [in]"], 
+            yerr=learning_curve["loo error std [in]"], marker="s"
+        )
+        plt.title("learning curve")
+        plt.ylim(ymin=0)
+        plt.show()
     return
 
 
@@ -874,13 +875,13 @@ def _(csv, pd):
         bkg_df = pd.DataFrame(rows, columns=new_header)
         return bkg_df
 
-    background_data = read_background_data()
-    background_data
-    return (background_data,)
+    raw_background_data = read_background_data()
+    raw_background_data
+    return (raw_background_data,)
 
 
 @app.cell
-def _(background_data, pd):
+def _(pd, raw_background_data):
     def reshape_bkg_data(data):
         # Convert ICR to numeric first, then group and apply list
         reshaped_dict = data.groupby('SN')['ICR'].apply(lambda x: pd.to_numeric(x, errors='coerce').tolist()).to_dict()
@@ -894,8 +895,83 @@ def _(background_data, pd):
 
         reshaped_df = pd.DataFrame.from_dict(summed_dict, orient='index').T
         return reshaped_df
-    bkg_cpm = reshape_bkg_data(background_data)
-    bkg_cpm
+    
+    data_bkg = reshape_bkg_data(raw_background_data)
+    data_bkg
+    return (data_bkg,)
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""classification.""")
+    return
+
+
+@app.cell
+def _(data, data_bkg, np, pd):
+    data_c = pd.concat(
+        [data,
+        data_bkg
+        ]
+    )
+    data_c.reset_index(inplace=True)
+    data_c["safe"] = ~ np.isnan(data_c["x_s"])
+    data_c
+    return (data_c,)
+
+
+@app.cell
+def _(sensors):
+    sensors
+    return
+
+
+@app.cell
+def _(ExtraTreesClassifier, LeaveOneOut, data, np, sensors):
+    # a multi-output tree ensemble model. maps 8D vectors to 2D vectors.
+    #  maps sensor network readout to source location
+    def do_loo_cv_classification(data_c, n_estimators=100, verbose=True, very_verbose=False):
+        data_loo = data_c.copy()
+        # store predicted source locations in data frame.
+        #  ok bc each data point is test point ONCE.
+        data_loo["safety_pred"] = np.zeros((len(data_c)))
+
+        loo = LeaveOneOut()
+        for i, (train_index, test_index) in enumerate(loo.split(data_loo)):
+            assert test_index.size == 1
+            if verbose:
+                print("fold :", i, " / ", data.shape[0])
+
+                if very_verbose:
+                    print("\ttest expt: ", test_index)
+                    print("\ttrain expt: ", train_index)
+                    print("\t\ttraining the tree ensemble.")
+
+            # build X_train, y_train
+            sensor_network_readout = data_loo.loc[train_index, sensors]
+            safety = data_loo.loc[train_index, "safe"]
+
+            # train tree ensemble on training data
+            tree_ensemble = ExtraTreesClassifier(n_estimators=n_estimators)
+            tree_ensemble.fit(sensor_network_readout, safety)
+
+            # test tree ensemble on test data
+            # first, build X_test, y_test
+            if very_verbose:
+                print("\t\ttesting the tree ensemble.")
+            sensor_network_readout_test = data_loo.loc[test_index, sensors]
+            safety_pred = tree_ensemble.predict(sensor_network_readout_test)[0]
+
+            # store prediction on test network readout.
+            data_loo.loc[test_index, "safety_pred"] = safety_pred
+
+        return data_loo
+    return (do_loo_cv_classification,)
+
+
+@app.cell
+def _(data_c, do_loo_cv_classification):
+    data_loo_c = do_loo_cv_classification(data_c)
     return
 
 
