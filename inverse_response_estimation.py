@@ -278,7 +278,7 @@ def _(dataframes, df_source_locs, n_expts, pd, sensors):
 
     data = make_data_nice(dataframes, df_source_locs)
     data
-    return data, make_data_nice
+    return (data,)
 
 
 @app.cell
@@ -385,7 +385,7 @@ def _(mo):
 @app.cell
 def _(data, plt, sensors, sns):
     sns.swarmplot(data[sensors], size=2)
-    plt.axhline(13.2, linestyle="--", color="gray") # background
+    plt.axhline(13.2, linestyle="--", color="gray", zorder=0) # background
     plt.yscale("log")
     plt.xlabel("sensor")
     plt.ylabel("response [CPS]")
@@ -502,10 +502,10 @@ def _(ExtraTreesRegressor, LeaveOneOut, np, sensors):
 
 
 @app.cell
-def _(run_loo_cv):
-    #run_loo_cv = mo.ui.checkbox(label="run LOO CV?")
+def _(mo):
+    run_loo_cv = mo.ui.checkbox(label="run LOO CV?")
     run_loo_cv
-    return
+    return (run_loo_cv,)
 
 
 @app.cell
@@ -843,110 +843,18 @@ def _(learning_curve, plt):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""## live demo-ing""")
-    return
-
-
-@app.cell
-def _(data, train_tree_ensemble):
-    tree_ensemble = train_tree_ensemble(data)
-    return (tree_ensemble,)
-
-
-@app.cell
-def _(dataframes):
-    demo_sensors = dataframes[0]["SN"].unique()
-    demo_sensors
-    return (demo_sensors,)
-
-
-@app.cell
-def _(demo):
-    demo_response = demo["ICR"]
-    demo_response
-    return (demo_response,)
-
-
-@app.cell
-def _(dataframes, demo_response, demo_sensors, pd):
-    def prep_demo_data(demo_sensors, demo_response):
-        demo_input = pd.DataFrame(columns=demo_sensors) 
-        new_row = {sensor : grab_sensor_response(dataframes[1], sensor) for sensor in demo_sensors}
-        demo_input.loc[1] = new_row
-        return demo_input
-
-
-    demo_input = prep_demo_data(demo_sensors, demo_response)
-    demo_input
-    return (demo_input,)
-
-
-@app.cell
-def _():
-    return
-
-
-@app.cell
-def _():
-    #demo_pred = rf.predict(demo_input)
-    #demo_pred
-    return
-
-
-@app.cell
-def _(demo_pred):
-    33.0-demo_pred[0][1]
-    return
-
-
-@app.cell
-def _(demo_input, tree_ensemble):
-    demo_input.iloc[0, :] = [
-        29.812,
-    23.847,
-    51.884,
-    20.271,
-    32.2,
-    31.005,
-    19.077,
-    78.744,
-
-
-    ]
-    demo_pred = tree_ensemble.predict(demo_input)
-    demo_pred
-    return (demo_pred,)
-
-
-@app.cell
-def _():
-    29.812
-    23.847
-    51.884
-    20.271
-    32.2
-    31.005
-    19.077
-    78.744
-
-    return
-
-
-@app.cell
-def _(mo):
     mo.md(r"""# background data""")
     return
 
 
 @app.cell
-def _(csv, folder_path, os, pd):
+def _(csv, pd):
     def read_background_data():
         bgk_df = {}
         filename = "background_shielding_model.csv"
-        file_path = os.path.join(folder_path, filename)
         print(f"\nReading {filename}...")
         # Use the filename (or file_path) as the key
-        with open(file_path, 'r') as file:
+        with open(filename, 'r') as file:
             csv_reader = csv.reader(file, delimiter=',')
             rows = []
             header = next(csv_reader)  # Read header separately
@@ -991,15 +899,9 @@ def _(background_data, pd):
     return
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""# sensor tampering data""")
-    return
-
-
-@app.cell
-def _():
-    tampered_dets_SN = [16512,16513,16519]
     return
 
 
@@ -1027,12 +929,6 @@ def _(folder_path, n_sensors, os, read_detector_outputs):
     tampering_data = read_tampering_data(10, [12,13,19])
     tampering_data
     return (tampering_data,)
-
-
-@app.cell
-def _(make_data_nice, tampering_data):
-    make_data_nice(tampering_data)
-    return
 
 
 @app.cell
