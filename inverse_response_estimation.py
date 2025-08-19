@@ -19,8 +19,8 @@ def _():
     from sklearn.metrics import ConfusionMatrixDisplay
     import matplotlib as mpl
     import seaborn as sns
-    plt.style.use('plot_settings/rose-pine-dawn.mplstyle') # https://github.com/h4pZ/rose-pine-matplotlib/tree/main/themes
-    fm.fontManager.addfont("plot_settings/SourceCodePro-Regular.ttf") # https://fonts.google.com/specimen/Source+Code+Pro
+    plt.style.use('rose-pine-dawn.mplstyle') # https://github.com/h4pZ/rose-pine-matplotlib/tree/main/themes
+    fm.fontManager.addfont("SourceCodePro-Regular.ttf") # https://fonts.google.com/specimen/Source+Code+Pro
     plt.rcParams["font.family"] = "Source Code Pro"
 
     from sklearn.ensemble import ExtraTreesClassifier, ExtraTreesRegressor, IsolationForest
@@ -316,7 +316,7 @@ def _(box_dims, data, plt, thing_to_color):
         plt.show()
 
     viz_source_locs(data)
-    return
+    return (viz_source_locs,)
 
 
 @app.cell(hide_code=True)
@@ -986,7 +986,7 @@ def _(ConfusionMatrixDisplay, data_loo_c, plt):
     return
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""viz the ones we got wrong""")
     return
@@ -1000,8 +1000,15 @@ def _(data_loo_c, np):
 
 
 @app.cell
-def _(data_loo_c, ids_wrong, viz_sensor_readout):
-    viz_sensor_readout(data_loo_c, ids_wrong[4])
+def _(ids_wrong, mo):
+    disagreement_selector = mo.ui.slider(steps=ids_wrong)
+    disagreement_selector
+    return (disagreement_selector,)
+
+
+@app.cell
+def _(data_loo_c, disagreement_selector, viz_sensor_readout):
+    viz_sensor_readout(data_loo_c, disagreement_selector.value)
     return
 
 
@@ -1009,7 +1016,7 @@ def _(data_loo_c, ids_wrong, viz_sensor_readout):
 def _(mo):
     mo.md(
         r"""
-    # detection of sensor tampering
+    # ☢️ detection of sensor tampering
 
     suppose we think a source is present, and we want to predict its location.
     now, we use anomaly detector to make sure a sensor is not being tampered with.
@@ -1062,10 +1069,10 @@ def _(pd):
                                  '16513', '16513', '16519', '16519', '16519', '16519', '16519', '16519', '16519', 
                                  '16519', '16519', '16519'
             ],
-            'xs' : [39.0, 37.0, 35.0, 33.0, 31.0, 40.0, 38.0, 36.0, 34.0, 32.0, 18.0, 20.0, 21.0, 22.0, 
+            'x_s' : [39.0, 37.0, 35.0, 33.0, 31.0, 40.0, 38.0, 36.0, 34.0, 32.0, 18.0, 20.0, 21.0, 22.0, 
                     21.0, 23.0, 24.0, 24.0, 23.0, 18.0, 7.0, 7.0, 7.0, 9.0, 10.0, 10.0, 10.0, 12.0, 12.0, 12.0
             ],
-            'ys' : [18.0, 18.0, 18.0, 18.0, 18.0, 15.0, 15.0, 15.0, 15.0, 15.0, 17.0, 15.0, 12.0, 10.0, 
+            'y_s' : [18.0, 18.0, 18.0, 18.0, 18.0, 15.0, 15.0, 15.0, 15.0, 15.0, 17.0, 15.0, 12.0, 10.0, 
                     7.0, 5.0, 8.0, 13.0, 16.0, 10.0, 29.0, 26.0, 24.0, 22.0, 25.0, 28.0, 31.0, 29.0, 26.0, 23.0
             ]
         }
@@ -1085,50 +1092,83 @@ def _(pd, raw_tampering_data, sensors, tampered_source_locs):
         data = pd.concat([tampered_source_locs, data], axis=1)
         return data
     
-    tamp_data = format_tampering_data(raw_tampering_data)
-    tamp_data
+    data_tamp = format_tampering_data(raw_tampering_data)
+    data_tamp
+    return (data_tamp,)
+
+
+@app.cell
+def _(data_tamp, viz_source_locs):
+    viz_source_locs(data_tamp)
     return
 
 
 @app.cell
+def _(data, viz_source_locs):
+    viz_source_locs(data)
+    return
+
+
+@app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""train isolation forest on normal data.""")
+    mo.md(
+        r"""
+    ## anomaly detection
+    train isolation forest on normal data. get anomaly scores for normal and tampering data.
+    """
+    )
     return
 
 
 @app.cell
-def _(IsolationForest, plt, sensors, train_test_split):
-    def train_test_anomaly_detection(data, raw_tampering_data):
-        # split normal data into train and tes
-        data_train, data_test = train_test_split(data, test_size=0.25)
+def _(IsolationForest, pd, plt, sensors, sns, train_test_split):
+    def train_test_anomaly_detection(data, data_tamp):
+        # split normal data into train and test
+        data_train, data_test = train_test_split(data, test_size=0.5, shuffle=True)
 
         iso_f = IsolationForest()
         iso_f.fit(data_train[sensors])
 
         ascore_normal = iso_f.decision_function(data_test[sensors])
+        a_normal = iso_f.predict(data_test[sensors])
+        ascore_tamp   = iso_f.decision_function(data_tamp[sensors])
+        a_tamp = iso_f.predict(data_tamp[sensors])
+    
+        adata = pd.concat(
+            [
+                pd.DataFrame({"anomaly score": ascore_normal, 'sensor tampering': 'no', 'anomaly': a_normal}),
+                pd.DataFrame({"anomaly score": ascore_tamp,   'sensor tampering': 'yes', 'anomaly': a_tamp})
+            ]
+        )
 
-        plt.figure()
-        plt.xlabel("anomaly score")
-        plt.hist(ascore_normal, label="normal")
-        plt.legend()
+        sns.kdeplot(data=adata, x="anomaly score", hue="sensor tampering", common_norm=False)
+        # plt.axvline(iso_f.offset_, color="gray", linestyle="--", zorder=1)
         plt.show()
+        return adata
     return (train_test_anomaly_detection,)
 
 
 @app.cell
-def _(data, train_test_anomaly_detection):
-    train_test_anomaly_detection(data, data)
+def _(data, data_tamp, train_test_anomaly_detection):
+    anomaly_data = train_test_anomaly_detection(data, data_tamp)
+    return (anomaly_data,)
+
+
+@app.cell
+def _(anomaly_data):
+    anomaly_data["anomaly"].value_counts()
     return
 
 
 @app.cell
-def _(data, train_test_split):
-    train_test_split(data)
+def _(data):
+    data
     return
 
 
 @app.cell
-def _():
+def _(data_tamp):
+    data_tamp
     return
 
 
