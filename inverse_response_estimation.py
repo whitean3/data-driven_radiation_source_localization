@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.14.9"
+__generated_with = "0.14.10"
 app = marimo.App(width="medium")
 
 
@@ -854,9 +854,8 @@ def _(mo):
 
 @app.cell
 def _(csv, pd):
-    def read_background_data():
+    def read_background_data(filename="background_shielding_model.csv"):
         bgk_df = {}
-        filename = "background_shielding_model.csv"
         print(f"\nReading {filename}...")
         # Use the filename (or file_path) as the key
         with open(filename, 'r') as file:
@@ -881,7 +880,14 @@ def _(csv, pd):
 
     raw_background_data = read_background_data()
     raw_background_data
-    return (raw_background_data,)
+    return raw_background_data, read_background_data
+
+
+@app.cell
+def _(read_background_data):
+    new_raw_bkg_data = read_background_data("Background_for_localization_model.csv")
+    new_raw_bkg_data
+    return (new_raw_bkg_data,)
 
 
 @app.cell
@@ -899,10 +905,29 @@ def _(pd, raw_background_data):
 
         reshaped_df = pd.DataFrame.from_dict(summed_dict, orient='index').T
         return reshaped_df
-    
+
     data_bkg = reshape_bkg_data(raw_background_data)
     data_bkg
     return (data_bkg,)
+
+
+@app.cell
+def _(pd):
+    def reshape_new_bkg_data(data):
+        # Convert ICR to numeric first, then group and apply list
+        reshaped_dict = data.groupby('SN')['ICR'].apply(lambda x: pd.to_numeric(x, errors='coerce').tolist()).to_dict()
+
+        reshaped_df = pd.DataFrame.from_dict(reshaped_dict, orient='index').T
+        return reshaped_df
+
+    return (reshape_new_bkg_data,)
+
+
+@app.cell
+def _(new_raw_bkg_data, reshape_new_bkg_data):
+    new_bkg_data = reshape_new_bkg_data(new_raw_bkg_data)
+    new_bkg_data
+    return
 
 
 @app.cell(hide_code=True)
@@ -1033,6 +1058,32 @@ def _(raw_tampering_data):
 
 
 @app.cell
+def _(pd):
+    tampered_source_locs = pd.DataFrame({
+    'tampered_sensor' : ['16512', '16512', '16512', '16512', '16512', '16512', '16512', '16512', '16512', '16512', '16513', '16513', '16513', '16513', '16513', '16513', '16513', '16513', '16513', '16513', '16519', '16519', '16519', '16519', '16519', '16519', '16519', '16519', '16519', '16519'],
+    'xs' : [39.0, 37.0, 35.0, 33.0, 31.0, 40.0, 38.0, 36.0, 34.0, 32.0, 18.0, 20.0, 21.0, 22.0, 21.0, 23.0, 24.0, 24.0, 23.0, 18.0, 7.0, 7.0, 7.0, 9.0, 10.0, 10.0, 10.0, 12.0, 12.0, 12.0],
+    'ys' : [18.0, 18.0, 18.0, 18.0, 18.0, 15.0, 15.0, 15.0, 15.0, 15.0, 17.0, 15.0, 12.0, 10.0, 7.0, 5.0, 8.0, 13.0, 16.0, 10.0, 29.0, 26.0, 24.0, 22.0, 25.0, 28.0, 31.0, 29.0, 26.0, 23.0]
+    })
+    return (tampered_source_locs,)
+
+
+@app.cell
+def _(pd, raw_tampering_data, sensors, tampered_source_locs):
+    def format_tampering_data(tampering_data):
+        data = pd.DataFrame(columns=sensors)
+        for tamp in raw_tampering_data:
+            for exp in range(1,len(raw_tampering_data[tamp])+1):
+                df = raw_tampering_data[tamp][exp]
+                new_row = {sensor : grab_sensor_response(df,sensor) for sensor in sensors}
+                data.loc[len(data)] = new_row
+        data = pd.concat([tampered_source_locs, data], axis=1)
+        return data
+    tamp_data = format_tampering_data(raw_tampering_data)
+    tamp_data
+    return
+
+
+@app.cell
 def _(mo):
     mo.md(r"""train isolation forest on normal data.""")
     return
@@ -1043,7 +1094,7 @@ def _(IsolationForest, plt, sensors, train_test_split):
     def train_test_anomaly_detection(data, raw_tampering_data):
         # split normal data into train and tes
         data_train, data_test = train_test_split(data, test_size=0.25)
-    
+
         iso_f = IsolationForest()
         iso_f.fit(data_train[sensors])
 
