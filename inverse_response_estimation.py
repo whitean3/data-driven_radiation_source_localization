@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.14.10"
+__generated_with = "0.14.17"
 app = marimo.App(width="medium")
 
 
@@ -361,7 +361,7 @@ def _(
         # plot source location
         plt.scatter(
             data.loc[exp, "x_s"], data.loc[exp, "y_s"], marker="o", 
-            s=65, color=thing_to_color["true source loc"], label="source location"
+            s=65, color=thing_to_color["true source loc"], label="source location", clip_on=False
         )
 
         # TODO draw obstacles
@@ -376,7 +376,7 @@ def _(
         plt.show()
 
     viz_sensor_readout(data, 19)
-    return
+    return (viz_sensor_readout,)
 
 
 @app.cell(hide_code=True)
@@ -410,7 +410,7 @@ def _(data, plt, sensors, sns):
 def _(mo):
     mo.md(
         r"""
-    # ::icon-park:new-computer:: ML
+    # ☢️ source location predictor
 
     ML task: predict source location from sensor network response
 
@@ -848,13 +848,21 @@ def _(learning_curve, plt, run_learning_curve):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""# background data""")
+    mo.md(
+        r"""
+    # ☢️ source presence classifier
+
+    distinguish source presence from background.
+
+    ##  background data
+    """
+    )
     return
 
 
 @app.cell
 def _(csv, pd):
-    def read_background_data(filename="background_shielding_model.csv"):
+    def read_background_data(filename):
         bgk_df = {}
         print(f"\nReading {filename}...")
         # Use the filename (or file_path) as the key
@@ -878,16 +886,9 @@ def _(csv, pd):
         bkg_df = pd.DataFrame(rows, columns=new_header)
         return bkg_df
 
-    raw_background_data = read_background_data()
+    raw_background_data = read_background_data("Background_for_localization_model.csv")
     raw_background_data
-    return raw_background_data, read_background_data
-
-
-@app.cell
-def _(read_background_data):
-    new_raw_bkg_data = read_background_data("Background_for_localization_model.csv")
-    new_raw_bkg_data
-    return (new_raw_bkg_data,)
+    return (raw_background_data,)
 
 
 @app.cell
@@ -896,14 +897,7 @@ def _(pd, raw_background_data):
         # Convert ICR to numeric first, then group and apply list
         reshaped_dict = data.groupby('SN')['ICR'].apply(lambda x: pd.to_numeric(x, errors='coerce').tolist()).to_dict()
 
-        # Sum every 6 values for each SN
-        summed_dict = {}
-        for sn, icr_values in reshaped_dict.items():
-            # Reshape into groups of 6 and sum each group
-            grouped = [sum(icr_values[i:i+6])/60 for i in range(0, len(icr_values), 6)]
-            summed_dict[sn] = grouped
-
-        reshaped_df = pd.DataFrame.from_dict(summed_dict, orient='index').T
+        reshaped_df = pd.DataFrame.from_dict(reshaped_dict, orient='index').T
         return reshaped_df
 
     data_bkg = reshape_bkg_data(raw_background_data)
@@ -911,39 +905,15 @@ def _(pd, raw_background_data):
     return (data_bkg,)
 
 
-@app.cell
-def _(pd):
-    def reshape_new_bkg_data(data):
-        # Convert ICR to numeric first, then group and apply list
-        reshaped_dict = data.groupby('SN')['ICR'].apply(lambda x: pd.to_numeric(x, errors='coerce').tolist()).to_dict()
-
-        reshaped_df = pd.DataFrame.from_dict(reshaped_dict, orient='index').T
-        return reshaped_df
-
-    return (reshape_new_bkg_data,)
-
-
-@app.cell
-def _(new_raw_bkg_data, reshape_new_bkg_data):
-    new_bkg_data = reshape_new_bkg_data(new_raw_bkg_data)
-    new_bkg_data
-    return
-
-
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""classification.""")
+    mo.md(r"""classification. concatentate the background with non-background.""")
     return
 
 
 @app.cell
 def _(data, data_bkg, np, pd):
-    data_c = pd.concat(
-        [data,
-        data_bkg
-        ]
-    )
-    data_c.reset_index(inplace=True)
+    data_c = pd.concat([data, data_bkg], ignore_index=True)
     data_c["safe"] = data_c["x_s"].map(lambda x_s : "safe" if np.isnan(x_s) else "not safe")
     data_c
     return (data_c,)
@@ -955,7 +925,7 @@ def _(ExtraTreesClassifier, LeaveOneOut, data, np, sensors):
     #  maps sensor network readout to source location
     def do_loo_cv_classification(data_c, n_estimators=100, verbose=True, very_verbose=False):
         data_loo = data_c.copy()
-        # store predicted source locations in data frame.
+        # store prediction of whether or not a source in the data frame.
         #  ok bc each data point is test point ONCE.
         data_loo["pred_safe"] = np.zeros((len(data_c)))
 
@@ -988,14 +958,10 @@ def _(ExtraTreesClassifier, LeaveOneOut, data, np, sensors):
             # store prediction on test network readout.
             data_loo.loc[test_index, "pred_safe"] = safety_pred
 
+        data_loo["agreement"] = data_loo["safe"] == data_loo["pred_safe"]
+    
         return data_loo
     return (do_loo_cv_classification,)
-
-
-@app.cell
-def _(data_loo_c):
-    data_loo_c["pred_safe"]
-    return
 
 
 @app.cell
@@ -1013,29 +979,59 @@ def _(ConfusionMatrixDisplay, data_loo_c, plt):
     )
     cm.ax_.tick_params(axis='x', labelsize=22)
     cm.ax_.tick_params(axis='y', labelsize=22)
-    cm.ax_.set_xlabel('Predicted label', fontsize=20)
-    cm.ax_.set_ylabel('True label', fontsize=20)
+    cm.ax_.set_xlabel('predicted label', fontsize=20)
+    cm.ax_.set_ylabel('true label', fontsize=20)
+    cm.im_.colorbar.set_label('# instances', fontsize=18)
     plt.show()
+    return
+
+
+@app.cell
+def _(mo):
+    mo.md(r"""viz the ones we got wrong""")
+    return
+
+
+@app.cell
+def _(data_loo_c, np):
+    ids_wrong = np.where(~ data_loo_c["agreement"])[0]
+    ids_wrong
+    return (ids_wrong,)
+
+
+@app.cell
+def _(data_loo_c, ids_wrong, viz_sensor_readout):
+    viz_sensor_readout(data_loo_c, ids_wrong[4])
     return
 
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""# sensor tampering data""")
+    mo.md(
+        r"""
+    # detection of sensor tampering
+
+    suppose we think a source is present, and we want to predict its location.
+    now, we use anomaly detector to make sure a sensor is not being tampered with.
+
+    ## read in sensor tampering data.
+    """
+    )
     return
 
 
 @app.cell
 def _(folder_path, n_sensors, os, read_detector_outputs):
-    def read_tampering_data(n_expts, dets):
+    def read_tampering_data():
+        n_expts = 10
+        dets = [12, 13, 19] # detectors tampered with
         tamp_data = {
             "12" : {},
             "13" : {},
             "19" : {}
         }
         for det in dets:
-            for exp in range(1,n_expts+1):
-
+            for exp in range(1, n_expts+1):
                 filename = f"det{det}_tamp{exp}.csv"
                 file_path = os.path.join(folder_path, filename)
                 print(f"\nReading {filename}...")
@@ -1046,7 +1042,7 @@ def _(folder_path, n_sensors, os, read_detector_outputs):
             assert tamp_data[f"{det}"][exp]["SN"].nunique() == n_sensors
         return tamp_data
 
-    raw_tampering_data = read_tampering_data(10, [12,13,19])
+    raw_tampering_data = read_tampering_data()
     raw_tampering_data
     return (raw_tampering_data,)
 
@@ -1059,17 +1055,27 @@ def _(raw_tampering_data):
 
 @app.cell
 def _(pd):
-    tampered_source_locs = pd.DataFrame({
-    'tampered_sensor' : ['16512', '16512', '16512', '16512', '16512', '16512', '16512', '16512', '16512', '16512', '16513', '16513', '16513', '16513', '16513', '16513', '16513', '16513', '16513', '16513', '16519', '16519', '16519', '16519', '16519', '16519', '16519', '16519', '16519', '16519'],
-    'xs' : [39.0, 37.0, 35.0, 33.0, 31.0, 40.0, 38.0, 36.0, 34.0, 32.0, 18.0, 20.0, 21.0, 22.0, 21.0, 23.0, 24.0, 24.0, 23.0, 18.0, 7.0, 7.0, 7.0, 9.0, 10.0, 10.0, 10.0, 12.0, 12.0, 12.0],
-    'ys' : [18.0, 18.0, 18.0, 18.0, 18.0, 15.0, 15.0, 15.0, 15.0, 15.0, 17.0, 15.0, 12.0, 10.0, 7.0, 5.0, 8.0, 13.0, 16.0, 10.0, 29.0, 26.0, 24.0, 22.0, 25.0, 28.0, 31.0, 29.0, 26.0, 23.0]
-    })
+    tampered_source_locs = pd.DataFrame(
+        {
+            'tampered_sensor' : ['16512', '16512', '16512', '16512', '16512', '16512', '16512', '16512', '16512', 
+                                 '16512', '16513', '16513', '16513', '16513', '16513', '16513', '16513', '16513', 
+                                 '16513', '16513', '16519', '16519', '16519', '16519', '16519', '16519', '16519', 
+                                 '16519', '16519', '16519'
+            ],
+            'xs' : [39.0, 37.0, 35.0, 33.0, 31.0, 40.0, 38.0, 36.0, 34.0, 32.0, 18.0, 20.0, 21.0, 22.0, 
+                    21.0, 23.0, 24.0, 24.0, 23.0, 18.0, 7.0, 7.0, 7.0, 9.0, 10.0, 10.0, 10.0, 12.0, 12.0, 12.0
+            ],
+            'ys' : [18.0, 18.0, 18.0, 18.0, 18.0, 15.0, 15.0, 15.0, 15.0, 15.0, 17.0, 15.0, 12.0, 10.0, 
+                    7.0, 5.0, 8.0, 13.0, 16.0, 10.0, 29.0, 26.0, 24.0, 22.0, 25.0, 28.0, 31.0, 29.0, 26.0, 23.0
+            ]
+        }
+    )
     return (tampered_source_locs,)
 
 
 @app.cell
 def _(pd, raw_tampering_data, sensors, tampered_source_locs):
-    def format_tampering_data(tampering_data):
+    def format_tampering_data(raw_tampering_data):
         data = pd.DataFrame(columns=sensors)
         for tamp in raw_tampering_data:
             for exp in range(1,len(raw_tampering_data[tamp])+1):
@@ -1078,6 +1084,7 @@ def _(pd, raw_tampering_data, sensors, tampered_source_locs):
                 data.loc[len(data)] = new_row
         data = pd.concat([tampered_source_locs, data], axis=1)
         return data
+    
     tamp_data = format_tampering_data(raw_tampering_data)
     tamp_data
     return
