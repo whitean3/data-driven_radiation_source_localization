@@ -13,6 +13,7 @@ def _():
     import marimo as mo
 
     import matplotlib.pyplot as plt
+    import matplotlib.patches as patches
     from matplotlib.patches import Ellipse
     import matplotlib.transforms as transforms
     import matplotlib.font_manager as fm
@@ -36,6 +37,7 @@ def _():
         mo,
         np,
         os,
+        patches,
         pd,
         plt,
         sns,
@@ -51,7 +53,11 @@ def _(sns):
     thing_to_color = {
         'true source loc': theme_colors[3], 
         'pred source loc': theme_colors[4], 
-        'sensor': theme_colors[2]
+        'sensor': theme_colors[2],
+        'lead': theme_colors[7],
+        'cardboard': theme_colors[6],
+        'MDF': theme_colors[0],
+        'pine': theme_colors[1]
     }
     sensor_colormap = "Purples"
 
@@ -326,9 +332,87 @@ def _(mo):
 
 
 @app.cell
+def _(box_dims, patches, thing_to_color):
+    def draw_obstacles(ax):
+        # circles (all lead)
+        r = 3.125 / 2
+        x_centers = [
+            [7, box_dims[1] - 17], 
+            [10, box_dims[1] - 17], 
+            [13, box_dims[1] - 17]
+        ]
+        for x_center in x_centers:
+            circle = patches.Circle(
+                x_center, r, 
+                color=thing_to_color["lead"], alpha=0.5
+            )
+            ax.add_patch(circle)
+
+        # rectangles (different materials)
+        x_bs = [
+            # lead
+            [0, box_dims[1]-3], 
+            [0, box_dims[1]-11], 
+            [0, box_dims[1]-21], 
+            [2, box_dims[1]-3], 
+            [2, box_dims[1]-11], 
+            [32, box_dims[1]-25], 
+            [34, box_dims[1]-25],
+            # cardboard
+            [20, box_dims[1]-24],
+            # MDF
+            [6, box_dims[1]-10], 
+            [28, 0], 
+            [28, box_dims[1]-7],
+            [38, 0],
+            # pine
+            [0, box_dims[1]-19]
+        ]
+        # bottom left
+        ws = [
+            # lead
+            2, 2, 2, 4, 4, 2, 8, 
+            # cardboard
+            18,
+            # MDF
+            7, 
+            1, 
+            14, 
+            1,
+            # pine
+            1
+        ]
+        hs = [
+            # lead
+            8, 8, 8, 8, 8, 8, 2, 
+            # cardboard
+            0.5,
+            # MDF
+            1, 
+            7, 
+            1, 
+            7,
+            # pine
+            1
+        ]
+   
+        mat = ["lead" for i in range(7)] + [
+            "cardboard"] + ["MDF" for i in range(4)] + ["pine"]
+        for r in range(len(x_bs)):
+            rectangle = patches.Rectangle(
+                x_bs[r], ws[r], hs[r], 
+                color=thing_to_color[mat[r]], alpha=0.5, 
+                label=mat[r]
+            )
+            ax.add_patch(rectangle)
+    return (draw_obstacles,)
+
+
+@app.cell
 def _(
     box_dims,
     data,
+    draw_obstacles,
     plt,
     sensor_colormap,
     sensor_to_loc,
@@ -340,6 +424,8 @@ def _(
 
         plt.figure()
 
+        draw_obstacles(plt.gca())
+    
         # plot sensors; color acc to response
         plt.scatter(
             # x locs of sensors
@@ -364,15 +450,23 @@ def _(
             s=65, color=thing_to_color["true source loc"], label="source location", clip_on=False
         )
 
-        # TODO draw obstacles
-
         plt.gca().set_aspect('equal', 'box')
         plt.xlabel("x [in]")
         plt.ylabel("y [in]")
         plt.xlim(0, box_dims[0])
         plt.ylim(0, box_dims[1])
         plt.title(f"experiment {exp}")
-        plt.legend()
+
+        # unique legend
+        # Get handles and labels
+        handles, labels = plt.gca().get_legend_handles_labels()
+    
+        # Create a dictionary to store unique labels and their corresponding handles
+        by_label = dict(zip(labels, handles))
+    
+        # Create the legend using only the unique entries
+        plt.legend(by_label.values(), by_label.keys(), bbox_to_anchor=(1.3, 0.5), loc='upper left', borderaxespad=0)
+
         plt.show()
 
     viz_sensor_readout(data, 19)
@@ -959,7 +1053,7 @@ def _(ExtraTreesClassifier, LeaveOneOut, data, np, sensors):
             data_loo.loc[test_index, "pred_safe"] = safety_pred
 
         data_loo["agreement"] = data_loo["safe"] == data_loo["pred_safe"]
-    
+
         return data_loo
     return (do_loo_cv_classification,)
 
@@ -1091,7 +1185,7 @@ def _(pd, raw_tampering_data, sensors, tampered_source_locs):
                 data.loc[len(data)] = new_row
         data = pd.concat([tampered_source_locs, data], axis=1)
         return data
-    
+
     data_tamp = format_tampering_data(raw_tampering_data)
     data_tamp
     return (data_tamp,)
@@ -1133,7 +1227,7 @@ def _(IsolationForest, pd, plt, sensors, sns, train_test_split):
         a_normal = iso_f.predict(data_test[sensors])
         ascore_tamp   = iso_f.decision_function(data_tamp[sensors])
         a_tamp = iso_f.predict(data_tamp[sensors])
-    
+
         adata = pd.concat(
             [
                 pd.DataFrame({"anomaly score": ascore_normal, 'sensor tampering': 'no', 'anomaly': a_normal}),
@@ -1161,14 +1255,17 @@ def _(anomaly_data):
 
 
 @app.cell
-def _(data):
-    data
+def _(anomaly_data):
+    anomaly_data["anomaly"]
     return
 
 
 @app.cell
-def _(data_tamp):
-    data_tamp
+def _(ConfusionMatrixDisplay, data_loo_c):
+    ConfusionMatrixDisplay.from_predictions(
+        data_loo_c["safe"].values, data_loo_c["pred_safe"].values,
+        text_kw={'fontsize': 22}
+    )
     return
 
 
