@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.14.16"
+__generated_with = "0.14.17"
 app = marimo.App(width="medium")
 
 
@@ -13,30 +13,35 @@ def _():
     import marimo as mo
 
     import matplotlib.pyplot as plt
+    import matplotlib.patches as patches
     from matplotlib.patches import Ellipse
     import matplotlib.transforms as transforms
     import matplotlib.font_manager as fm
+    from sklearn.metrics import ConfusionMatrixDisplay
     import matplotlib as mpl
     import seaborn as sns
-    plt.style.use('rose-pine-dawn.mplstyle')
-    fm.fontManager.addfont("/Users/cokes/Library/Fonts/SourceCodePro-Regular.ttf")
+    plt.style.use('rose-pine-dawn.mplstyle') # https://github.com/h4pZ/rose-pine-matplotlib/tree/main/themes
+    fm.fontManager.addfont("SourceCodePro-Regular.ttf") # https://fonts.google.com/specimen/Source+Code+Pro
     plt.rcParams["font.family"] = "Source Code Pro"
 
-    from sklearn.ensemble import RandomForestRegressor, ExtraTreesRegressor
-    from sklearn.model_selection import LeaveOneOut
-    from sklearn.neighbors import KNeighborsRegressor
-    from sklearn.preprocessing import StandardScaler
+    from sklearn.ensemble import ExtraTreesClassifier, ExtraTreesRegressor, IsolationForest
+    from sklearn.model_selection import LeaveOneOut, train_test_split
     return (
+        ConfusionMatrixDisplay,
         Ellipse,
+        ExtraTreesClassifier,
         ExtraTreesRegressor,
+        IsolationForest,
         LeaveOneOut,
         csv,
         mo,
         np,
         os,
+        patches,
         pd,
         plt,
         sns,
+        train_test_split,
         transforms,
     )
 
@@ -48,7 +53,11 @@ def _(sns):
     thing_to_color = {
         'true source loc': theme_colors[3], 
         'pred source loc': theme_colors[4], 
-        'sensor': theme_colors[2]
+        'sensor': theme_colors[2],
+        'lead': theme_colors[7],
+        'cardboard': theme_colors[6],
+        'MDF': theme_colors[0],
+        'pine': theme_colors[1]
     }
     sensor_colormap = "Purples"
 
@@ -278,7 +287,7 @@ def _(dataframes, df_source_locs, n_expts, pd, sensors):
 
     data = make_data_nice(dataframes, df_source_locs)
     data
-    return data, make_data_nice
+    return (data,)
 
 
 @app.cell
@@ -313,7 +322,7 @@ def _(box_dims, data, plt, thing_to_color):
         plt.show()
 
     viz_source_locs(data)
-    return
+    return (viz_source_locs,)
 
 
 @app.cell(hide_code=True)
@@ -323,9 +332,87 @@ def _(mo):
 
 
 @app.cell
+def _(box_dims, patches, thing_to_color):
+    def draw_obstacles(ax):
+        # circles (all lead)
+        r = 3.125 / 2
+        x_centers = [
+            [7, box_dims[1] - 17], 
+            [10, box_dims[1] - 17], 
+            [13, box_dims[1] - 17]
+        ]
+        for x_center in x_centers:
+            circle = patches.Circle(
+                x_center, r, 
+                color=thing_to_color["lead"], alpha=0.5
+            )
+            ax.add_patch(circle)
+
+        # rectangles (different materials)
+        x_bs = [
+            # lead
+            [0, box_dims[1]-3], 
+            [0, box_dims[1]-11], 
+            [0, box_dims[1]-21], 
+            [2, box_dims[1]-3], 
+            [2, box_dims[1]-11], 
+            [32, box_dims[1]-25], 
+            [34, box_dims[1]-25],
+            # cardboard
+            [20, box_dims[1]-24],
+            # MDF
+            [6, box_dims[1]-10], 
+            [28, 0], 
+            [28, box_dims[1]-7],
+            [38, 0],
+            # pine
+            [0, box_dims[1]-19]
+        ]
+        # bottom left
+        ws = [
+            # lead
+            2, 2, 2, 4, 4, 2, 8, 
+            # cardboard
+            18,
+            # MDF
+            7, 
+            1, 
+            14, 
+            1,
+            # pine
+            1
+        ]
+        hs = [
+            # lead
+            8, 8, 8, 8, 8, 8, 2, 
+            # cardboard
+            0.5,
+            # MDF
+            1, 
+            7, 
+            1, 
+            7,
+            # pine
+            1
+        ]
+   
+        mat = ["lead" for i in range(7)] + [
+            "cardboard"] + ["MDF" for i in range(4)] + ["pine"]
+        for r in range(len(x_bs)):
+            rectangle = patches.Rectangle(
+                x_bs[r], ws[r], hs[r], 
+                color=thing_to_color[mat[r]], alpha=0.5, 
+                label=mat[r]
+            )
+            ax.add_patch(rectangle)
+    return (draw_obstacles,)
+
+
+@app.cell
 def _(
     box_dims,
     data,
+    draw_obstacles,
     plt,
     sensor_colormap,
     sensor_to_loc,
@@ -337,6 +424,8 @@ def _(
 
         plt.figure()
 
+        draw_obstacles(plt.gca())
+    
         # plot sensors; color acc to response
         plt.scatter(
             # x locs of sensors
@@ -358,10 +447,8 @@ def _(
         # plot source location
         plt.scatter(
             data.loc[exp, "x_s"], data.loc[exp, "y_s"], marker="o", 
-            s=65, color=thing_to_color["true source loc"], label="source location"
+            s=65, color=thing_to_color["true source loc"], label="source location", clip_on=False
         )
-
-        # TODO draw obstacles
 
         plt.gca().set_aspect('equal', 'box')
         plt.xlabel("x [in]")
@@ -369,11 +456,21 @@ def _(
         plt.xlim(0, box_dims[0])
         plt.ylim(0, box_dims[1])
         plt.title(f"experiment {exp}")
-        plt.legend()
+
+        # unique legend
+        # Get handles and labels
+        handles, labels = plt.gca().get_legend_handles_labels()
+    
+        # Create a dictionary to store unique labels and their corresponding handles
+        by_label = dict(zip(labels, handles))
+    
+        # Create the legend using only the unique entries
+        plt.legend(by_label.values(), by_label.keys(), bbox_to_anchor=(1.3, 0.5), loc='upper left', borderaxespad=0)
+
         plt.show()
 
     viz_sensor_readout(data, 19)
-    return
+    return (viz_sensor_readout,)
 
 
 @app.cell(hide_code=True)
@@ -385,7 +482,7 @@ def _(mo):
 @app.cell
 def _(data, plt, sensors, sns):
     sns.swarmplot(data[sensors], size=2)
-    plt.axhline(13.2, linestyle="--", color="gray") # background
+    plt.axhline(13.2, linestyle="--", color="gray", zorder=0) # background
     plt.yscale("log")
     plt.xlabel("sensor")
     plt.ylabel("response [CPS]")
@@ -407,7 +504,7 @@ def _(data, plt, sensors, sns):
 def _(mo):
     mo.md(
         r"""
-    # ::icon-park:new-computer:: ML
+    # ☢️ source location predictor
 
     ML task: predict source location from sensor network response
 
@@ -455,7 +552,7 @@ def _(ExtraTreesRegressor, LeaveOneOut, np, sensors):
             assert test_index.size == 1
             if verbose:
                 print("fold :", i, " / ", data.shape[0])
-            
+
                 if very_verbose:
                     print("\ttest expt: ", test_index)
                     print("\ttrain expt: ", train_index)
@@ -502,10 +599,10 @@ def _(ExtraTreesRegressor, LeaveOneOut, np, sensors):
 
 
 @app.cell
-def _(run_loo_cv):
-    #run_loo_cv = mo.ui.checkbox(label="run LOO CV?")
+def _(mo):
+    run_loo_cv = mo.ui.checkbox(label="run LOO CV?")
     run_loo_cv
-    return
+    return (run_loo_cv,)
 
 
 @app.cell
@@ -563,7 +660,7 @@ def _(box_dims, data_loo, plt):
     plt.subplots_adjust(wspace=0.3)
     for ax in [ax1, ax2]:
         ax.set_aspect('equal', 'box')
-    
+
     ax1.set_xlim(0, box_dims[0])
     ax1.set_ylim(0, box_dims[0])
     ax2.set_xlim(0, box_dims[1])
@@ -751,7 +848,7 @@ def _(
         plt.ylim(0, box_dims[1])
 
         plt.legend(bbox_to_anchor=(1.3, 0.5), loc='upper left', borderaxespad=0)
-    
+
         plt.show()
 
     _exp = 6
@@ -794,7 +891,7 @@ def _(mo):
     return
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(mo):
     run_learning_curve = mo.ui.checkbox(label="compute the learning curve?")
     run_learning_curve
@@ -820,133 +917,50 @@ def _(data, do_loo_cv, np, pd, run_learning_curve):
             loo_errors_mu.append(np.mean(loo_errors))
             loo_errors_std.append(np.std(loo_errors))
 
-    learning_curve = pd.DataFrame(
-        {"# data": nb_datas, "loo error [in]": loo_errors_mu, "loo error std [in]": loo_errors_std}
-    )
+    if run_learning_curve.value:
+        learning_curve = pd.DataFrame(
+            {"# data": nb_datas, "loo error [in]": loo_errors_mu, "loo error std [in]": loo_errors_std}
+        )
     return (learning_curve,)
 
 
 @app.cell
-def _(learning_curve, plt):
-    plt.figure()
-    plt.xlabel("# data")
-    plt.ylabel("LOO error [in]")
-    plt.errorbar(
-        learning_curve["# data"], learning_curve["loo error [in]"], 
-        yerr=learning_curve["loo error std [in]"], marker="s"
-    )
-    plt.title("learning curve")
-    plt.ylim(ymin=0)
-    plt.show()
+def _(learning_curve, plt, run_learning_curve):
+    if run_learning_curve.value:
+        plt.figure()
+        plt.xlabel("# data")
+        plt.ylabel("LOO error [in]")
+        plt.errorbar(
+            learning_curve["# data"], learning_curve["loo error [in]"], 
+            yerr=learning_curve["loo error std [in]"], marker="s"
+        )
+        plt.title("learning curve")
+        plt.ylim(ymin=0)
+        plt.show()
     return
 
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""## live demo-ing""")
+    mo.md(
+        r"""
+    # ☢️ source presence classifier
+
+    distinguish source presence from background.
+
+    ##  background data
+    """
+    )
     return
 
 
 @app.cell
-def _(data, train_tree_ensemble):
-    tree_ensemble = train_tree_ensemble(data)
-    return (tree_ensemble,)
-
-
-@app.cell
-def _(dataframes):
-    demo_sensors = dataframes[0]["SN"].unique()
-    demo_sensors
-    return (demo_sensors,)
-
-
-@app.cell
-def _(demo):
-    demo_response = demo["ICR"]
-    demo_response
-    return (demo_response,)
-
-
-@app.cell
-def _(dataframes, demo_response, demo_sensors, pd):
-    def prep_demo_data(demo_sensors, demo_response):
-        demo_input = pd.DataFrame(columns=demo_sensors) 
-        new_row = {sensor : grab_sensor_response(dataframes[1], sensor) for sensor in demo_sensors}
-        demo_input.loc[1] = new_row
-        return demo_input
-
-
-    demo_input = prep_demo_data(demo_sensors, demo_response)
-    demo_input
-    return (demo_input,)
-
-
-@app.cell
-def _():
-    return
-
-
-@app.cell
-def _():
-    #demo_pred = rf.predict(demo_input)
-    #demo_pred
-    return
-
-
-@app.cell
-def _(demo_pred):
-    33.0-demo_pred[0][1]
-    return
-
-
-@app.cell
-def _(demo_input, tree_ensemble):
-    demo_input.iloc[0, :] = [
-        29.812,
-    23.847,
-    51.884,
-    20.271,
-    32.2,
-    31.005,
-    19.077,
-    78.744,
-
-
-    ]
-    demo_pred = tree_ensemble.predict(demo_input)
-    demo_pred
-    return (demo_pred,)
-
-
-@app.cell
-def _():
-    29.812
-    23.847
-    51.884
-    20.271
-    32.2
-    31.005
-    19.077
-    78.744
-
-    return
-
-
-@app.cell
-def _(mo):
-    mo.md(r"""# background data""")
-    return
-
-
-@app.cell
-def _(csv, folder_path, os, pd):
-    def read_background_data():
+def _(csv, pd):
+    def read_background_data(filename):
         bgk_df = {}
-        filename = "background_shielding_model.csv"
-        file_path = os.path.join(folder_path, filename)
         print(f"\nReading {filename}...")
         # Use the filename (or file_path) as the key
-        with open(file_path, 'r') as file:
+        with open(filename, 'r') as file:
             csv_reader = csv.reader(file, delimiter=',')
             rows = []
             header = next(csv_reader)  # Read header separately
@@ -966,54 +980,159 @@ def _(csv, folder_path, os, pd):
         bkg_df = pd.DataFrame(rows, columns=new_header)
         return bkg_df
 
-    background_data = read_background_data()
-    background_data
-    return (background_data,)
+    raw_background_data = read_background_data("Background_for_localization_model.csv")
+    raw_background_data
+    return (raw_background_data,)
 
 
 @app.cell
-def _(background_data, pd):
+def _(pd, raw_background_data):
     def reshape_bkg_data(data):
         # Convert ICR to numeric first, then group and apply list
         reshaped_dict = data.groupby('SN')['ICR'].apply(lambda x: pd.to_numeric(x, errors='coerce').tolist()).to_dict()
-    
-        # Sum every 6 values for each SN
-        summed_dict = {}
-        for sn, icr_values in reshaped_dict.items():
-            # Reshape into groups of 6 and sum each group
-            grouped = [sum(icr_values[i:i+6])/60 for i in range(0, len(icr_values), 6)]
-            summed_dict[sn] = grouped
-    
-        reshaped_df = pd.DataFrame.from_dict(summed_dict, orient='index').T
+
+        reshaped_df = pd.DataFrame.from_dict(reshaped_dict, orient='index').T
         return reshaped_df
-    bkg_cpm = reshape_bkg_data(background_data)
-    bkg_cpm
-    return (bkg_cpm,)
+
+    data_bkg = reshape_bkg_data(raw_background_data)
+    data_bkg
+    return (data_bkg,)
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""# sensor tampering data""")
+    mo.md(r"""classification. concatentate the background with non-background.""")
     return
 
 
 @app.cell
-def _():
-    tampered_dets_SN = [16512,16513,16519]
+def _(data, data_bkg, np, pd):
+    data_c = pd.concat([data, data_bkg], ignore_index=True)
+    data_c["safe"] = data_c["x_s"].map(lambda x_s : "safe" if np.isnan(x_s) else "not safe")
+    data_c
+    return (data_c,)
+
+
+@app.cell
+def _(ExtraTreesClassifier, LeaveOneOut, data, np, sensors):
+    # a multi-output tree ensemble model. maps 8D vectors to 2D vectors.
+    #  maps sensor network readout to source location
+    def do_loo_cv_classification(data_c, n_estimators=100, verbose=True, very_verbose=False):
+        data_loo = data_c.copy()
+        # store prediction of whether or not a source in the data frame.
+        #  ok bc each data point is test point ONCE.
+        data_loo["pred_safe"] = np.zeros((len(data_c)))
+
+        loo = LeaveOneOut()
+        for i, (train_index, test_index) in enumerate(loo.split(data_loo)):
+            assert test_index.size == 1
+            if verbose:
+                print("fold :", i, " / ", data.shape[0])
+
+                if very_verbose:
+                    print("\ttest expt: ", test_index)
+                    print("\ttrain expt: ", train_index)
+                    print("\t\ttraining the tree ensemble.")
+
+            # build X_train, y_train
+            sensor_network_readout = data_loo.loc[train_index, sensors]
+            safety = data_loo.loc[train_index, "safe"]
+
+            # train tree ensemble on training data
+            tree_ensemble = ExtraTreesClassifier(n_estimators=n_estimators)
+            tree_ensemble.fit(sensor_network_readout, safety)
+
+            # test tree ensemble on test data
+            # first, build X_test, y_test
+            if very_verbose:
+                print("\t\ttesting the tree ensemble.")
+            sensor_network_readout_test = data_loo.loc[test_index, sensors]
+            safety_pred = tree_ensemble.predict(sensor_network_readout_test)[0]
+
+            # store prediction on test network readout.
+            data_loo.loc[test_index, "pred_safe"] = safety_pred
+
+        data_loo["agreement"] = data_loo["safe"] == data_loo["pred_safe"]
+
+        return data_loo
+    return (do_loo_cv_classification,)
+
+
+@app.cell
+def _(data_c, do_loo_cv_classification):
+    data_loo_c = do_loo_cv_classification(data_c)
+    data_loo_c
+    return (data_loo_c,)
+
+
+@app.cell
+def _(ConfusionMatrixDisplay, data_loo_c, plt):
+    cm = ConfusionMatrixDisplay.from_predictions(
+        data_loo_c["safe"].values, data_loo_c["pred_safe"].values,
+        text_kw={'fontsize': 22}
+    )
+    cm.ax_.tick_params(axis='x', labelsize=22)
+    cm.ax_.tick_params(axis='y', labelsize=22)
+    cm.ax_.set_xlabel('predicted label', fontsize=20)
+    cm.ax_.set_ylabel('true label', fontsize=20)
+    cm.im_.colorbar.set_label('# instances', fontsize=18)
+    plt.show()
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""viz the ones we got wrong""")
+    return
+
+
+@app.cell
+def _(data_loo_c, np):
+    ids_wrong = np.where(~ data_loo_c["agreement"])[0]
+    ids_wrong
+    return (ids_wrong,)
+
+
+@app.cell
+def _(ids_wrong, mo):
+    disagreement_selector = mo.ui.slider(steps=ids_wrong)
+    disagreement_selector
+    return (disagreement_selector,)
+
+
+@app.cell
+def _(data_loo_c, disagreement_selector, viz_sensor_readout):
+    viz_sensor_readout(data_loo_c, disagreement_selector.value)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(
+        r"""
+    # ☢️ detection of sensor tampering
+
+    suppose we think a source is present, and we want to predict its location.
+    now, we use anomaly detector to make sure a sensor is not being tampered with.
+
+    ## read in sensor tampering data.
+    """
+    )
     return
 
 
 @app.cell
 def _(folder_path, n_sensors, os, read_detector_outputs):
-    def read_tampering_data(n_expts, dets):
+    def read_tampering_data():
+        n_expts = 10
+        dets = [12, 13, 19] # detectors tampered with
         tamp_data = {
             "12" : {},
             "13" : {},
             "19" : {}
         }
         for det in dets:
-            for exp in range(1,n_expts+1):
-
+            for exp in range(1, n_expts+1):
                 filename = f"det{det}_tamp{exp}.csv"
                 file_path = os.path.join(folder_path, filename)
                 print(f"\nReading {filename}...")
@@ -1024,25 +1143,129 @@ def _(folder_path, n_sensors, os, read_detector_outputs):
             assert tamp_data[f"{det}"][exp]["SN"].nunique() == n_sensors
         return tamp_data
 
-    tampering_data = read_tampering_data(10, [12,13,19])
-    tampering_data
-    return (tampering_data,)
+    raw_tampering_data = read_tampering_data()
+    raw_tampering_data
+    return (raw_tampering_data,)
 
 
 @app.cell
-def _(make_data_nice, tampering_data):
-    make_data_nice(tampering_data)
+def _(raw_tampering_data):
+    raw_tampering_data
     return
 
 
 @app.cell
-def _(tampering_data):
-    tampering_data
+def _(pd):
+    tampered_source_locs = pd.DataFrame(
+        {
+            'tampered_sensor' : ['16512', '16512', '16512', '16512', '16512', '16512', '16512', '16512', '16512', 
+                                 '16512', '16513', '16513', '16513', '16513', '16513', '16513', '16513', '16513', 
+                                 '16513', '16513', '16519', '16519', '16519', '16519', '16519', '16519', '16519', 
+                                 '16519', '16519', '16519'
+            ],
+            'x_s' : [39.0, 37.0, 35.0, 33.0, 31.0, 40.0, 38.0, 36.0, 34.0, 32.0, 18.0, 20.0, 21.0, 22.0, 
+                    21.0, 23.0, 24.0, 24.0, 23.0, 18.0, 7.0, 7.0, 7.0, 9.0, 10.0, 10.0, 10.0, 12.0, 12.0, 12.0
+            ],
+            'y_s' : [18.0, 18.0, 18.0, 18.0, 18.0, 15.0, 15.0, 15.0, 15.0, 15.0, 17.0, 15.0, 12.0, 10.0, 
+                    7.0, 5.0, 8.0, 13.0, 16.0, 10.0, 29.0, 26.0, 24.0, 22.0, 25.0, 28.0, 31.0, 29.0, 26.0, 23.0
+            ]
+        }
+    )
+    return (tampered_source_locs,)
+
+
+@app.cell
+def _(pd, raw_tampering_data, sensors, tampered_source_locs):
+    def format_tampering_data(raw_tampering_data):
+        data = pd.DataFrame(columns=sensors)
+        for tamp in raw_tampering_data:
+            for exp in range(1,len(raw_tampering_data[tamp])+1):
+                df = raw_tampering_data[tamp][exp]
+                new_row = {sensor : grab_sensor_response(df,sensor) for sensor in sensors}
+                data.loc[len(data)] = new_row
+        data = pd.concat([tampered_source_locs, data], axis=1)
+        return data
+
+    data_tamp = format_tampering_data(raw_tampering_data)
+    data_tamp
+    return (data_tamp,)
+
+
+@app.cell
+def _(data_tamp, viz_source_locs):
+    viz_source_locs(data_tamp)
     return
 
 
 @app.cell
-def _():
+def _(data, viz_source_locs):
+    viz_source_locs(data)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(
+        r"""
+    ## anomaly detection
+    train isolation forest on normal data. get anomaly scores for normal and tampering data.
+    """
+    )
+    return
+
+
+@app.cell
+def _(IsolationForest, pd, plt, sensors, sns, train_test_split):
+    def train_test_anomaly_detection(data, data_tamp):
+        # split normal data into train and test
+        data_train, data_test = train_test_split(data, test_size=0.5, shuffle=True)
+
+        iso_f = IsolationForest()
+        iso_f.fit(data_train[sensors])
+
+        ascore_normal = iso_f.decision_function(data_test[sensors])
+        a_normal = iso_f.predict(data_test[sensors])
+        ascore_tamp   = iso_f.decision_function(data_tamp[sensors])
+        a_tamp = iso_f.predict(data_tamp[sensors])
+
+        adata = pd.concat(
+            [
+                pd.DataFrame({"anomaly score": ascore_normal, 'sensor tampering': 'no', 'anomaly': a_normal}),
+                pd.DataFrame({"anomaly score": ascore_tamp,   'sensor tampering': 'yes', 'anomaly': a_tamp})
+            ]
+        )
+
+        sns.kdeplot(data=adata, x="anomaly score", hue="sensor tampering", common_norm=False)
+        # plt.axvline(iso_f.offset_, color="gray", linestyle="--", zorder=1)
+        plt.show()
+        return adata
+    return (train_test_anomaly_detection,)
+
+
+@app.cell
+def _(data, data_tamp, train_test_anomaly_detection):
+    anomaly_data = train_test_anomaly_detection(data, data_tamp)
+    return (anomaly_data,)
+
+
+@app.cell
+def _(anomaly_data):
+    anomaly_data["anomaly"].value_counts()
+    return
+
+
+@app.cell
+def _(anomaly_data):
+    anomaly_data["anomaly"]
+    return
+
+
+@app.cell
+def _(ConfusionMatrixDisplay, data_loo_c):
+    ConfusionMatrixDisplay.from_predictions(
+        data_loo_c["safe"].values, data_loo_c["pred_safe"].values,
+        text_kw={'fontsize': 22}
+    )
     return
 
 
