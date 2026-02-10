@@ -21,7 +21,6 @@ def _():
     from sklearn.metrics import ConfusionMatrixDisplay
     import matplotlib as mpl
     import seaborn as sns
-    from scipy.optimize import least_squares
     plt.style.use('rose-pine-dawn.mplstyle') # https://github.com/h4pZ/rose-pine-matplotlib/tree/main/themes
     fm.fontManager.addfont("SourceCodePro-Regular.ttf") # https://fonts.google.com/specimen/Source+Code+Pro
     plt.rcParams["font.family"] = "Source Code Pro"
@@ -36,7 +35,6 @@ def _():
         IsolationForest,
         LeaveOneOut,
         csv,
-        least_squares,
         math,
         mo,
         np,
@@ -862,7 +860,7 @@ def _(
         plt.show()
 
     explain_errors(data_loo)
-    return
+    return (explain_errors,)
 
 
 @app.cell
@@ -1214,12 +1212,12 @@ def _(bkg_var, np):
     return
 
 
-app._unparsable_cell(
-    r"""
+@app.cell
+def _(mo):
+    mo.md(r"""
     Looks at the statistical anomaly detection
-    """,
-    name="_"
-)
+    """)
+    return
 
 
 @app.cell
@@ -1553,379 +1551,537 @@ def _(ConfusionMatrixDisplay, data_loo_c):
     return
 
 
+@app.cell
+def _(mo):
+    mo.md(r"""
+    #Traingulation
+    """)
+    return
+
+
+@app.cell
+def _(avg_bkgs, np):
+    # Calculated the significant threshold for each detector based on the measured background
+    Nds = 4.65*np.sqrt(avg_bkgs) +2.71
+    return (Nds,)
+
+
+@app.cell
+def _(Nds):
+    Nds_dict = {
+        '16518':Nds[0],
+        '16517':Nds[1],
+        '16516':Nds[2],
+        '16519':Nds[3],
+        '16520':Nds[4],
+        '16521':Nds[5],
+        '16512':Nds[6],
+        '16513':Nds[7]
+    }
+    return (Nds_dict,)
+
+
+@app.cell
+def _(avg_bkgs):
+    avg_bkgs
+    return
+
+
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    # Baseline Localization
+    ### Response to distance conversion
     """)
     return
 
 
-@app.cell
-def _(np):
-    m = np.array([366.832,325.406,236.634, 157.014,110.397, 103.229, 120.558, 50.095, 54.271, 38.758, 42.934, 34.583, 33.39, 35.775, 22.655, 16.692, 22.059, 23.848, 23.848, 25.637, 15.5, 13.115])
-    return
-
-
-@app.cell
-def _(np):
-    d = np.array([26,34,60,85,136,161,186,212,237,262,288,313,338,364,389,415,440,466,491,517,542,568])
-    return
-
-
-@app.cell
+@app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    $d=\frac{\sqrt{-4a\tan ^2\left(\frac{\pi N}{S}\right)-4b\tan ^2\left(\frac{\pi N}{S}\right)+\sqrt{\left(4a\tan ^2\left(\frac{\pi N}{S}\right)+4b\tan ^2\left(\frac{\pi N}{S}\right)\right)^2+64a^2b^2\tan ^2\left(\frac{\pi N}{S}\right)}}}{4\sqrt{2}\tan \left(\frac{\pi N}{S}\right)},\:$
-
-    $d=-\frac{\sqrt{-4a\tan ^2\left(\frac{\pi N}{S}\right)-4b\tan ^2\left(\frac{\pi N}{S}\right)+\sqrt{\left(4a\tan ^2\left(\frac{\pi N}{S}\right)+4b\tan ^2\left(\frac{\pi N}{S}\right)\right)^2+64a^2b^2\tan ^2\left(\frac{\pi N}{S}\right)}}}{4\sqrt{2}\tan \left(\frac{\pi N}{S}\right)},\:$
-
-    $d=\frac{\sqrt{-4a\tan ^2\left(\frac{\pi N}{S}\right)-4b\tan ^2\left(\frac{\pi N}{S}\right)-\sqrt{\left(4a\tan ^2\left(\frac{\pi N}{S}\right)+4b\tan ^2\left(\frac{\pi N}{S}\right)\right)^2+64a^2b^2\tan ^2\left(\frac{\pi N}{S}\right)}}}{4\sqrt{2}\tan \left(\frac{\pi N}{S}\right)},\:$
-
-    $d=-\frac{\sqrt{-4a\tan ^2\left(\frac{\pi N}{S}\right)-4b\tan ^2\left(\frac{\pi N}{S}\right)-\sqrt{\left(4a\tan ^2\left(\frac{\pi N}{S}\right)+4b\tan ^2\left(\frac{\pi N}{S}\right)\right)^2+64a^2b^2\tan ^2\left(\frac{\pi N}{S}\right)}}}{4\sqrt{2}\tan \left(\frac{\pi N}{S}\right)}$
+    Data:
     """)
     return
 
 
 @app.cell
-def _(np, sensor_locations):
-    def compute_omega(x_s, y_s):
-        """
-        Compute solid angle factor Ω_n for all detectors.
-    
-        Returns:
-        --------
-        omega : array, shape (N,)
-            Solid angle factors for each detector
-        """
-        detectors = np.array(sensor_locations)
-        a=1.4/2.54
-        b=2.8/2.54
-        # Distance from source to each detector
-        dx = x_s - detectors[:, 0]
-        dy = y_s - detectors[:, 1]
-        d = np.sqrt(dx**2 + dy**2)
-    
-        # Avoid division by zero
-        d = np.maximum(d, 1e-10)
-    
-        # Compute alpha and beta
-        alpha = a / (2 * d)
-        beta = b / (2 * d)
-    
-        # Compute omega
-        numerator = alpha * beta
-        denominator = np.sqrt(1 + alpha**2 + beta**2)
-    
-        # Ensure argument is in valid range for arcsin
-        arg = numerator / denominator
-        arg = np.clip(arg, -1, 1)
-    
-        omega = 4 * np.arcsin(arg)
-    
-        return omega
-    return (compute_omega,)
+def _(np):
+    m = np.array([366.832,325.406,236.634, 157.014,110.397, 103.229, 50.095, 54.271, 38.758, 42.934, 34.583, 33.39, 35.775, 22.655, 16.692, 22.059, 23.848, 23.848, 25.637, 15.5, 13.115])
+    return (m,)
 
 
 @app.cell
-def _(compute_omega, least_squares, np):
-    def localize_source(detector_positions, counts):
-        """
-        Localize a radiation source using detector array measurements.
-    
-        Model: N_n = (S/ε_ip) * (Ω_n/4π)
-        where Ω_n = 4*arcsin(α_n*β_n / sqrt(1 + α_n² + β_n²))
-        with α_n = a/(2*d_n), β_n = b/(2*d_n)
-        and d_n = sqrt((x_s - x_n)² + (y_s - y_n)²)
-    
-        Parameters:
-        -----------
-        detector_positions : array-like, shape (N, 2)
-            Positions of detectors [[x_1, y_1], [x_2, y_2], ...]
-        counts : array-like, shape (N,)
-            Measured counts at each detector [N_1, N_2, ..., N_N]
-        a : float
-            Detector geometry constant
-        b : float
-            Detector geometry constant
-        initial_guess : array-like, shape (2,) or (3,), optional
-            Initial guess [x_s, y_s] or [x_s, y_s, k]
-            If None, uses weighted centroid of detectors
-    
-        Returns:
-        --------
-        result : dict
-            Dictionary containing:
-            - 'x_s': estimated x position
-            - 'y_s': estimated y position
-            - 'k': estimated scaling factor S/ε_ip
-            - 'success': whether optimization succeeded
-        """
-        detectors = np.array(detector_positions)
-        counts = np.array(counts)
-        a=1.4/2.54
-        b=2.8/2.54
-        def residuals(params):
-            """Compute residuals: r_n = N_n - k*R_n(x_s, y_s)"""
-            x_s, y_s, k = params
-        
-            # Compute omega for the source position
-            omega = compute_omega(x_s, y_s)
-        
-            # Compute response R = 4π/Ω
-            R = omega / (4 * np.pi)
-        
-            return counts - k * R
-    
-        # Initial guess using weighted centroid
-    
-        weights = counts / np.sum(counts)
-        x_init = np.sum(weights * detectors[:, 0])
-        y_init = np.sum(weights * detectors[:, 1])
-        k_init = np.max(counts)  # Rough estimate
-        initial_guess = [x_init, y_init, k_init]
-
-    
-        # Solve least squares problem
-        result = least_squares(residuals, x0=initial_guess, method='lm')
-    
-        return {
-            'x_s': result.x[0],
-            'y_s': result.x[1],
-            'k': result.x[2],
-            'success': result.success
-        }
-
-    return (localize_source,)
+def _(np):
+    d = np.array([26,34,60,85,136,161,186,237,262,288,313,338,364,389,415,440,466,491,517,542,568])
+    return (d,)
 
 
 @app.cell
-def _(data, np, sensors):
-    measurements = np.array(data.loc[:,sensors])
-    return (measurements,)
-
-
-@app.cell
-def _(np, sensor_to_loc):
-    sensor_locations = np.array(list(sensor_to_loc.values()))
-    return (sensor_locations,)
-
-
-@app.cell
-def _(localize_source, measurements, sensor_locations):
-    results = [localize_source(sensor_locations, measurements[i]) for i in range(len(measurements))]
-    return (results,)
-
-
-@app.cell
-def _(df_source_locs, results):
-    bl_y_pred = [results[i]['y_s'] for i in range(len(results))]
-    bl_x_pred = [results[i]['y_s'] for i in range(len(results))]
-    bl_y_true = [df_source_locs['y_s'][i] for i in range(len(results))]
-    bl_x_true = [df_source_locs['x_s'][i] for i in range(len(results))]
-    return bl_x_pred, bl_x_true, bl_y_pred, bl_y_true
-
-
-@app.cell
-def _(df_source_locs, np, results):
-    bl_x_errors = [np.abs(results[i]['x_s'] - df_source_locs['x_s'][i]) for i in range(len(results))]
-    return (bl_x_errors,)
-
-
-@app.cell
-def _(df_source_locs, np, results):
-    bl_y_errors = [np.abs(results[i]['y_s'] - df_source_locs['y_s'][i]) for i in range(len(results))]
-    return (bl_y_errors,)
-
-
-@app.cell
-def _(bl_x_errors, bl_y_errors, math):
-    bl_dist_error = [math.sqrt(pow(bl_x_errors[i],2) + pow(bl_y_errors[i],2)) for i in range(len(bl_x_errors))]
-    return (bl_dist_error,)
-
-
-@app.cell
-def _(bl_dist_error, plt):
-    plt.figure()
-    plt.hist(bl_dist_error)
-    plt.xlabel("error [in]")
-    plt.ylabel("# experiments")
-    plt.title("LOO-CV error")
-    plt.show()
+def _(d, m, plt):
+    plt.scatter(d,m/max(m))
     return
 
 
-@app.cell
-def _(bl_x_errors, plt):
-    plt.figure()
-    plt.hist(bl_x_errors)
-    plt.xlabel("error [in]")
-    plt.ylabel("# experiments")
-    plt.title("LOO-CV error")
-    plt.show()
-    return
-
-
-@app.cell
-def _(bl_y_errors, plt):
-    plt.figure()
-    plt.hist([error for error in bl_y_errors if error < 50])
-    plt.xlabel("error [in]")
-    plt.ylabel("# experiments")
-    plt.title("LOO-CV error")
-    plt.show()
-    return
-
-
-@app.cell
-def _(
-    bl_x_errors,
-    bl_x_pred,
-    bl_x_true,
-    bl_y_errors,
-    bl_y_pred,
-    bl_y_true,
-    box_dims,
-    np,
-    plt,
-):
-    def _():
-        f, (ax1, ax2) = plt.subplots(1, 2)
-        #plt.subplots_adjust(wspace=0.3)
-        #for ax in [ax1, ax2]:
-        #    ax.set_aspect('equal', 'box')
-
-        ax1.set_xlim(0, 32)
-        ax1.set_ylim(0, 80)
-        ax2.set_xlim(0, 32)
-        ax2.set_ylim(0, 80)
-
-        ax1.set_xlabel("x$_s$ [in]")
-        ax2.set_xlabel("y$_s$ [in]")
-        ax1.set_ylabel("predicted x$_s$ [in]")
-        ax2.set_ylabel("predicted y$_s$ [in]")
-
-        ax1.plot([0, box_dims[0]], [0, box_dims[0]], color="black", linestyle="--")
-        ax2.plot([0, box_dims[1]], [0, box_dims[1]], color="black", linestyle="--")
-
-        ax1.scatter(bl_x_true, bl_x_pred, clip_on=False)
-        ax2.scatter(bl_y_true, bl_y_pred, clip_on=False)
-
-        bl_x_err = np.mean(bl_x_errors)
-        bl_y_err = np.mean(bl_y_errors)
-
-        return plt.show()
-
-
-    _()
-    return
-
-
-@app.cell
-def _(compute_omega, df_source_locs, np):
-    def make_unshielded_responses(x_true, y_true, k_true = 807e+3):
-
-        omega = compute_omega(x_true, y_true)
-        R = omega/(4 * np.pi)
-        ideal_counts = k_true*R
-        measured_counts = np.random.poisson(ideal_counts)
-        return measured_counts
-    print(make_unshielded_responses(df_source_locs['x_s'][0], df_source_locs['y_s'][0]))
-    return (make_unshielded_responses,)
-
-
-@app.cell
-def _(
-    df_source_locs,
-    localize_source,
-    make_unshielded_responses,
-    sensor_locations,
-):
-    unshielded_results = [localize_source(sensor_locations, make_unshielded_responses(df_source_locs['x_s'][i], df_source_locs['y_s'][i])) for i in range(len(df_source_locs))]
-    return (unshielded_results,)
-
-
-@app.cell
-def _(df_source_locs, results):
-    US_bl_y_pred = [results[i]['y_s'] for i in range(len(results))]
-    US_bl_x_pred = [results[i]['y_s'] for i in range(len(results))]
-    US_bl_y_true = [df_source_locs['y_s'][i] for i in range(len(results))]
-    US_bl_x_true = [df_source_locs['x_s'][i] for i in range(len(results))]
-    return US_bl_x_pred, US_bl_x_true, US_bl_y_pred, US_bl_y_true
-
-
-@app.cell
-def _(df_source_locs, math, np, unshielded_results):
-    US_bl_x_errors = [np.abs(unshielded_results[i]['x_s'] - df_source_locs['x_s'][i]) for i in range(len(unshielded_results))]
-    US_bl_y_errors = [np.abs(unshielded_results[i]['y_s'] - df_source_locs['y_s'][i]) for i in range(len(unshielded_results))]
-    US_bl_dist_error = [math.sqrt(pow(US_bl_x_errors[i],2) + pow(US_bl_y_errors[i],2)) for i in range(len(US_bl_x_errors))]
-    return US_bl_dist_error, US_bl_x_errors, US_bl_y_errors
-
-
-@app.cell
-def _(US_bl_dist_error, plt):
-    plt.figure()
-    plt.hist(US_bl_dist_error)
-    plt.xlabel("error [in]")
-    plt.ylabel("# experiments")
-    plt.title("LOO-CV error")
-    plt.show()
-    return
-
-
-@app.cell
-def _(
-    US_bl_x_errors,
-    US_bl_x_pred,
-    US_bl_x_true,
-    US_bl_y_errors,
-    US_bl_y_pred,
-    US_bl_y_true,
-    box_dims,
-    np,
-    plt,
-):
-    def _():
-        f, (ax1, ax2) = plt.subplots(1, 2)
-        #plt.subplots_adjust(wspace=0.3)
-        #for ax in [ax1, ax2]:
-        #    ax.set_aspect('equal', 'box')
-
-        ax1.set_xlim(0, box_dims[0])
-        ax1.set_ylim(0, box_dims[0])
-        ax2.set_xlim(0, box_dims[1])
-        ax2.set_ylim(0, box_dims[1])
-
-        ax1.set_xticks([0, 10, 20, 30, 40])
-        ax1.set_yticks([0, 10, 20, 30, 40])
-
-        ax2.set_xticks([0, 5, 10, 15, 20, 25, 30])
-        ax2.set_yticks([0, 5, 10, 15, 20, 25, 30])
-
-        ax1.set_xlabel("x$_s$ [in]")
-        ax2.set_xlabel("y$_s$ [in]")
-        ax1.set_ylabel("predicted x$_s$ [in]")
-        ax2.set_ylabel("predicted y$_s$ [in]")
-
-        ax1.plot([0, box_dims[0]], [0, box_dims[0]], color="black", linestyle="--")
-        ax2.plot([0, box_dims[1]], [0, box_dims[1]], color="black", linestyle="--")
-
-        ax1.scatter(US_bl_x_true, US_bl_x_pred, clip_on=False)
-        ax2.scatter(US_bl_y_true, US_bl_y_pred, clip_on=False)
-
-        bl_x_err = np.mean(US_bl_x_errors)
-        bl_y_err = np.mean(US_bl_y_errors)
-        ax1.legend(title=f"error = {bl_x_err:.2f} in")
-        ax2.legend(title=f"error = {bl_y_err:.2f} in")
-        return plt.show()
-
-
-    _()
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    Data fit to detector response function.
+    """)
     return
 
 
 @app.cell
 def _():
+    import scipy.optimize as optimize
+    return (optimize,)
+
+
+@app.cell
+def _(np):
+    def response_fun(d, S, e_ip, a, b):
+        #a = 14
+        #b = 28
+        alpha = a/(2*d)
+        beta = b/(2*d)
+        numerator = alpha * beta
+        denominator = np.sqrt(1 + alpha**2 + beta**2)
+        omega = 4*np.arctan(numerator/denominator) 
+
+        N = (S*0.3*omega)/(4*np.pi) + 12
+        return N
+    return (response_fun,)
+
+
+@app.cell
+def _(d, m, np, optimize, response_fun):
+    fit_results = optimize.curve_fit(response_fun, d, m, bounds=(0,np.inf), p0=[15.984e+6, 0.3, 14, 28])
+    return (fit_results,)
+
+
+@app.cell
+def _(fit_results):
+    print(fit_results[0])
+    return
+
+
+@app.cell
+def _(np):
+    ds = np.array(range(26,600))
+    return (ds,)
+
+
+@app.cell
+def _(ds, fit_results, response_fun):
+    y_pred = [response_fun(ds[i], fit_results[0][0],  fit_results[0][1],  fit_results[0][2],  fit_results[0][3]) for i in range(len(ds))]
+    return (y_pred,)
+
+
+@app.cell
+def _(d, ds, m, plt, y_pred):
+    plt.plot(ds/10,y_pred)
+    plt.scatter(d/10,m)
+    plt.xlabel("Distance (cm)")
+    plt.ylabel("Count Rate (#/min)")
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    #### Function to convert measured counts to distance
+    """)
+    return
+
+
+@app.cell
+def _(y_pred):
+    def get_x_for_y(y):
+        """
+        Find the index of the value closest to the target.
+
+        Args:
+            values: List of numerical values
+            target: The target value to find closest match for
+
+        Returns:
+            Index of the closest value
+        """  
+        closest_index = 0
+        min_difference = abs(y_pred[0] - y)
+
+        for i in range(1, len(y_pred)):
+            difference = abs(y_pred[i] - y)
+            if difference < min_difference:
+                min_difference = difference
+                closest_index = i
+
+        return closest_index+26
+
+    # Test Usage:
+    y_target = 60
+    x_result = get_x_for_y(y_target)
+
+    if x_result is not None:
+        print(f"For y = {y_target}, x = {x_result:.4f}")
+    else:
+        print(f"No solution > 30 for y = {y_target}")
+    return (get_x_for_y,)
+
+
+@app.cell
+def _(get_x_for_y, np):
+    def response_to_dist(responses):
+
+        x_results = []
+        for y in responses:
+            x = get_x_for_y(y)
+            x_results.append(x)
+            #print(f"y = {y:5.1f} → x = {x:.4f}" if x else f"y = {y:5.1f} → No valid solution")
+
+        # Convert to numpy array (filtering out None values if needed)
+        x_array = np.array([x for x in x_results if x is not None])
+        return x_array
+    return (response_to_dist,)
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ## Least Squares Estimator
+    """)
+    return
+
+
+@app.cell
+def _(data):
+    sorted_responses = [dict(sorted(data.iloc[meas][2:10].items(), key=lambda x: int(x[0]))) for meas in range(len(data))]
+    return (sorted_responses,)
+
+
+@app.cell
+def _(np, response_to_dist, sensor_to_loc):
+    from scipy.optimize import minimize
+    def predict_loc_LSE(measurements, Nds):
+        sensors = list(sensor_to_loc.values())
+        n_responses = 0
+        sig_responses = []
+        sig_sensors = []
+    
+        # Loops through the measurements and finds the ones with meaningful values
+        for i in range(len(measurements)): 
+            if measurements[i] > Nds[i]:
+                n_responses += 1
+                sig_responses.append(measurements[i])
+                sig_sensors.append(sensors[i])
+
+        # If the number of significant values is greater than 1, then perform least square error localization
+        if len(sig_responses) > 1:
+
+            # Response to distance conversion and mm to inch conversion
+            distances = response_to_dist(sig_responses)/25.4
+
+            # Define the objective to be minimized
+            def objective(x, sensors, distances):
+                """
+                x: [x_pos, y_pos] - source position to optimize
+                sensors: array of sensor positions
+                distances: array of measured distances
+                """
+                residuals = np.linalg.norm(x - sensors, axis=1) - distances
+                return np.sum(residuals**2)
+            
+            # Initial guess using weighted centroid    
+            weights = sig_responses / np.sum(sig_responses)
+            x_init = np.sum(weights * [x[0] for x in sig_sensors])
+            y_init = np.sum(weights * [y[1] for y in sig_sensors])
+            initial_guess = [x_init, y_init]
+        
+            # Minimize the objective by BFGS optimization
+            result = minimize(objective, initial_guess, args=(sig_sensors, distances), method='BFGS')
+            return result
+        else:
+            print("Not enough significant readings.")
+    return (predict_loc_LSE,)
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    #### Function to localize for the whole dataset
+    """)
+    return
+
+
+@app.cell
+def _(Nds, Nds_dict, data, predict_loc_LSE, sorted_responses):
+    def localize(data, Nds_dict):
+        LSE_preds = []
+        results = []
+        for i in range(len(data)):
+            result = predict_loc_LSE(list(sorted_responses[i].values()), Nds)
+            results.append(result)
+            if result != None:
+                LSE_preds.append(result.x)
+            else:
+                LSE_preds.append(result)
+                print("exp:",i)
+        return LSE_preds, results
+    LSE_preds, Full_LSE_results = localize(data, Nds_dict)
+    return Full_LSE_results, LSE_preds
+
+
+@app.cell
+def _(Full_LSE_results):
+    Full_LSE_results
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    Finds the indexes where no solution was able to be found
+    """)
+    return
+
+
+@app.cell
+def _(LSE_preds):
+    LSE_nones = [i for i, x in enumerate(LSE_preds) if x is None]
+    LSE_nones
+    return (LSE_nones,)
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    Vizualizes the source locations where no solution was able to be found
+    """)
+    return
+
+
+@app.cell
+def _(LSE_nones, data, viz_sensor_readout):
+    def viz_nones(data, LSE_nones):
+        for exp in LSE_nones:
+            viz_sensor_readout(data,exp)
+    viz_nones(data, LSE_nones)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    Calculate Errors
+    """)
+    return
+
+
+@app.cell
+def _(LSE_preds, data, np):
+    def calc_LSE_errors(data, LSE_preds):
+        LSE_errors = []
+        for i in range(len(LSE_preds)):
+            if LSE_preds[i] is not None:
+                LSE_errors.append(np.sqrt((data['x_s'][i]-LSE_preds[i][0])**2+(data['y_s'][i]-LSE_preds[i][1])**2))
+        return LSE_errors
+
+
+    LSE_errors = calc_LSE_errors(data, LSE_preds)
+    return (LSE_errors,)
+
+
+@app.cell
+def _(LSE_errors):
+    avg_LSE_error = sum(LSE_errors)/len(LSE_errors)
+    avg_LSE_error
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    Visualize Error
+    """)
+    return
+
+
+@app.cell
+def _(LSE_preds, data, np):
+    def make_lse_data_nice(data,LSE_preds):
+        data_lse = data.copy()
+        data_lse["x_s_pred"] = np.zeros((len(data)))
+        data_lse["y_s_pred"] = np.zeros((len(data)))
+        data_lse["error"] = np.zeros((len(data)))
+        for i in range(len(data_lse)):
+            if LSE_preds[i] is not None:
+                data_lse.loc[i,"x_s_pred"] = LSE_preds[i][0]
+                data_lse.loc[i,"y_s_pred"] = LSE_preds[i][1]
+                data_lse.loc[i,"error"] = np.sqrt((data['x_s'][i]-LSE_preds[i][0])**2+(data['y_s'][i]-LSE_preds[i][1])**2)
+        return data_lse
+    data_lse = make_lse_data_nice(data,LSE_preds)
+    return (data_lse,)
+
+
+@app.cell
+def _(LSE_errors, plt):
+    plt.figure()
+    plt.hist(LSE_errors)
+    plt.xlabel("error [in]")
+    plt.ylabel("# experiments")
+    plt.title("Triangulation error")
+    plt.show()
+    return
+
+
+@app.cell
+def _(data_lse, explain_errors):
+    explain_errors(data_lse)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    Other method left for reference
+    """)
+    return
+
+
+@app.cell
+def _(mo):
+    mo.md(r"""
+    # Iterative NLLS
+    """)
+    return
+
+
+@app.cell
+def _(sensor_to_loc):
+    sensor_to_loc["16512"][1]
+    return
+
+
+@app.cell
+def _(sensor_to_loc):
+    sensor_to_loc
+    return
+
+
+@app.cell
+def _(np):
+    phi_0 = np.array([0,0])
+    return (phi_0,)
+
+
+@app.cell
+def _(np):
+    def nlls_loc(sensor_locs, distances, phi_0):
+        Y = distances.reshape(-1,1)
+
+        H = np.array([[(phi_0[0] - sensor_loc[0])/np.sqrt((phi_0[0]-sensor_loc[0])**2+(phi_0[1]-sensor_loc[1])**2), (phi_0[1] - sensor_loc[1])/np.sqrt((phi_0[0]-sensor_loc[0])**2+(phi_0[1]-sensor_loc[1])**2)] for sensor_loc in sensor_locs.values()])
+
+        h_phi0 = np.array([[np.sqrt((phi_0[0]-sensor_loc[0])**2+(phi_0[1]-sensor_loc[1])**2)] for sensor_loc in sensor_locs.values()])
+        delta = np.linalg.solve(H.T @ H, H.T @ (Y - h_phi0)).flatten()
+        return phi_0 + delta
+    return (nlls_loc,)
+
+
+@app.cell
+def _(data):
+    data
+    return
+
+
+@app.cell
+def _(sorted_responses):
+    sorted_responses[1].values()
+    return
+
+
+@app.cell
+def _(response_to_dist, sorted_responses):
+    distances = [response_to_dist(sorted_responses[i].values()) for i in range(0,len(sorted_responses))]
+    return (distances,)
+
+
+@app.cell
+def _(distances, np):
+    distances_in = np.array(distances)/25.4
+    return (distances_in,)
+
+
+@app.cell
+def _(distances_in):
+    distances_in[0]
+    return
+
+
+@app.cell
+def _(distances_in, nlls_loc, phi_0, sensor_to_loc):
+    nlls_preds = [nlls_loc(sensor_to_loc, dists, phi_0) for dists in distances_in]
+    return (nlls_preds,)
+
+
+@app.cell
+def _(data):
+    data['x_s'][0]
+    return
+
+
+@app.cell
+def _(data, math, nlls_preds):
+    nlls_errs = [math.sqrt((data['x_s'][i]-nlls_preds[i][0])**2+(data['y_s'][i]-nlls_preds[i][1])**2) for i in range(0,len(data))]
+    return (nlls_errs,)
+
+
+@app.cell
+def _(nlls_errs, plt):
+    plt.figure()
+    plt.hist(nlls_errs)
+    plt.xlabel("error [in]")
+    plt.ylabel("# experiments")
+    plt.title("Triangulation error")
+    plt.show()
+    return
+
+
+@app.cell
+def _(distances_in, nlls_loc, nlls_preds, sensor_to_loc):
+    def iter_nlls(nlls_preds, num_its):
+        phi_0 = nlls_preds
+        for i in range(num_its):
+            nlls_preds_it = [nlls_loc(sensor_to_loc, distances_in[i], nlls_preds[i]) for i in range(0,len(distances_in))]
+            phi_0 = nlls_preds_it
+        return nlls_preds_it
+    nlls_preds_it = iter_nlls(nlls_preds, 10)
+    return (nlls_preds_it,)
+
+
+@app.cell
+def _(data, math, nlls_preds_it):
+    nlls_errs_it = [math.sqrt((data['x_s'][i]-nlls_preds_it[i][0])**2+(data['y_s'][i]-nlls_preds_it[i][1])**2) for i in range(0,len(data))]
+    return (nlls_errs_it,)
+
+
+@app.cell
+def _(nlls_errs_it, plt):
+    plt.figure()
+    plt.hist(nlls_errs_it)
+    plt.xlabel("error [in]")
+    plt.ylabel("# experiments")
+    plt.title("Triangulation error")
+    plt.show()
+    return
+
+
+@app.cell
+def _(sensor_to_loc):
+    def _():
+        centers = []
+        for loc in sensor_to_loc.values():
+            centers.append((float(loc[0]),float(loc[1])))
+
+        return centers
+    centers = _()
     return
 
 
