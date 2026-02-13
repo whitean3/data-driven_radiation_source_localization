@@ -764,40 +764,42 @@ def _(mo):
 
 @app.cell
 def _(box_dims, data_loo, plt):
-    f, (ax1, ax2) = plt.subplots(1, 2)
-    plt.subplots_adjust(wspace=0.3)
-    for ax in [ax1, ax2]:
-        ax.set_aspect('equal', 'box')
-
-    ax1.set_xlim(0, box_dims[0])
-    ax1.set_ylim(0, box_dims[0])
-    ax2.set_xlim(0, box_dims[1])
-    ax2.set_ylim(0, box_dims[1])
-
-    ax1.set_xticks([0, 10, 20, 30, 40])
-    ax1.set_yticks([0, 10, 20, 30, 40])
-
-    ax2.set_xticks([0, 5, 10, 15, 20, 25, 30])
-    ax2.set_yticks([0, 5, 10, 15, 20, 25, 30])
-
-    ax1.set_xlabel("x$_s$ [in]")
-    ax2.set_xlabel("y$_s$ [in]")
-    ax1.set_ylabel("predicted x$_s$ [in]")
-    ax2.set_ylabel("predicted y$_s$ [in]")
-
-    ax1.plot([0, box_dims[0]], [0, box_dims[0]], color="black", linestyle="--")
-    ax2.plot([0, box_dims[1]], [0, box_dims[1]], color="black", linestyle="--")
-
-    ax1.scatter(data_loo["x_s"], data_loo["x_s_pred"], clip_on=False)
-    ax2.scatter(data_loo["y_s"], data_loo["y_s_pred"], clip_on=False)
-
-    x_err = data_loo["error_x"].mean()
-    y_err = data_loo["error_y"].mean()
-    ax1.legend(title=f"error = {x_err:.2f} in")
-    ax2.legend(title=f"error = {y_err:.2f} in")
-
-    plt.show()
-    return
+    def xy_parity_plot(data):
+        f, (ax1, ax2) = plt.subplots(1, 2)
+        plt.subplots_adjust(wspace=0.3)
+        for ax in [ax1, ax2]:
+            ax.set_aspect('equal', 'box')
+    
+        ax1.set_xlim(0, box_dims[0])
+        ax1.set_ylim(0, box_dims[0])
+        ax2.set_xlim(0, box_dims[1])
+        ax2.set_ylim(0, box_dims[1])
+    
+        ax1.set_xticks([0, 10, 20, 30, 40])
+        ax1.set_yticks([0, 10, 20, 30, 40])
+    
+        ax2.set_xticks([0, 5, 10, 15, 20, 25, 30])
+        ax2.set_yticks([0, 5, 10, 15, 20, 25, 30])
+    
+        ax1.set_xlabel("x$_s$ [in]")
+        ax2.set_xlabel("y$_s$ [in]")
+        ax1.set_ylabel("predicted x$_s$ [in]")
+        ax2.set_ylabel("predicted y$_s$ [in]")
+    
+        ax1.plot([0, box_dims[0]], [0, box_dims[0]], color="black", linestyle="--")
+        ax2.plot([0, box_dims[1]], [0, box_dims[1]], color="black", linestyle="--")
+    
+        ax1.scatter(data["x_s"], data["x_s_pred"], clip_on=False)
+        ax2.scatter(data["y_s"], data["y_s_pred"], clip_on=False)
+    
+        x_err = data["error_x"].mean()
+        y_err = data["error_y"].mean()
+        ax1.legend(title=f"error = {x_err:.2f} in")
+        ax2.legend(title=f"error = {y_err:.2f} in")
+    
+        plt.show()
+    xy_parity_plot(data_loo)
+    return (xy_parity_plot,)
 
 
 @app.cell
@@ -1864,11 +1866,6 @@ def _(LSE_nones, data, viz_sensor_readout):
 
 
 @app.cell
-def _():
-    return
-
-
-@app.cell
 def _(LSE_preds, data, np):
     def make_lse_data_nice(data,LSE_preds):
         data_lse = data.copy()
@@ -1882,6 +1879,18 @@ def _(LSE_preds, data, np):
         return data_lse
     data_lse = make_lse_data_nice(data,LSE_preds)
     return data_lse, make_lse_data_nice
+
+
+@app.cell
+def _(data_loo):
+    len(data_loo)
+    return
+
+
+@app.cell
+def _(data_lse):
+    len(data_lse["error"])
+    return
 
 
 @app.cell(hide_code=True)
@@ -1908,17 +1917,22 @@ def _(data_lse, np):
 
 @app.cell
 def _(LSE_nones, data_lse, np):
-    np.mean(data_lse["error"].drop(index=LSE_nones))
-    return
+    lse_mean_error = np.mean(data_lse["error"].drop(index=LSE_nones))
+    return (lse_mean_error,)
 
 
 @app.cell
-def _(data_lse, plt):
+def _(LSE_nones, data_loo, data_lse, lse_mean_error, mean_error, np, plt):
     plt.figure()
-    plt.hist(data_lse["error"])
+    plt.hist(data_lse["error"].drop(index=LSE_nones), label="lse error", alpha=0.5,bins=np.linspace(0, 20, 50))
+    plt.hist(data_loo["error"], label="LOO error", alpha=0.5,bins=np.linspace(0, 20, 50))
+    plt.axvline(lse_mean_error, label="lse mean error", color='pink')
+    plt.axvline(mean_error, label="loo mean error", color='orange')
     plt.xlabel("error [in]")
     plt.ylabel("# experiments")
-    plt.title("Triangulation error")
+    plt.title("LSE-Triangulation error")
+
+    plt.legend()
     plt.show()
     return
 
@@ -1928,6 +1942,12 @@ def _(mo):
     mo.md(r"""
     Visualize Error
     """)
+    return
+
+
+@app.cell
+def _(data_lse, xy_parity_plot):
+    xy_parity_plot(data_lse)
     return
 
 
@@ -2029,11 +2049,6 @@ def _(
     return
 
 
-@app.cell
-def _():
-    return
-
-
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
@@ -2047,18 +2062,6 @@ def _(mo):
     mo.md(r"""
     # Iterative NLLS
     """)
-    return
-
-
-@app.cell
-def _(sensor_to_loc):
-    sensor_to_loc["16512"][1]
-    return
-
-
-@app.cell
-def _(sensor_to_loc):
-    sensor_to_loc
     return
 
 
@@ -2093,18 +2096,6 @@ def _(np):
         delta, *_ = np.linalg.lstsq(H, (Y - h_phi0), rcond=None)
         return phi_0 + delta.flatten()
     return (nlls_loc,)
-
-
-@app.cell
-def _(data):
-    data
-    return
-
-
-@app.cell
-def _(sorted_responses):
-    sorted_responses[1].values()
-    return
 
 
 @app.cell
@@ -2161,7 +2152,7 @@ def _(distances_in, nlls_loc, nlls_preds, np, sensor_to_loc):
         for _ in range(num_its):
             phi = [nlls_loc(sensor_to_loc, distances_in[j], phi[j]) for j in range(len(distances_in))]
         return phi
-    nlls_preds_it = iter_nlls(nlls_preds, 10)
+    nlls_preds_it = iter_nlls(nlls_preds, 3)
     return (nlls_preds_it,)
 
 
@@ -2212,13 +2203,22 @@ def _(data, make_lse_data_nice, nlls_preds_it, np):
 
 
 @app.cell
+def _(data_nlls, np):
+    data_nlls["error_x"] = np.abs(data_nlls["x_s"] - data_nlls["x_s_pred"])
+    data_nlls["error_y"] = np.abs(data_nlls["y_s"] - data_nlls["y_s_pred"])
+    data_nlls["error"] = np.sqrt((data_nlls["x_s"] - data_nlls["x_s_pred"]) ** 2 + (data_nlls["y_s"] - data_nlls["y_s_pred"]) ** 2)
+    return
+
+
+@app.cell
 def _(data_nlls, explain_errors):
     explain_errors(data_nlls)
     return
 
 
 @app.cell
-def _():
+def _(data_nlls, np):
+    np.mean(data_nlls["error"])
     return
 
 
