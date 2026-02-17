@@ -1319,9 +1319,9 @@ def _(np, pd):
                 np.array(
                     [
                         26, 34, 60, 85, 136, 161, 186, 237, 262, 288, 313,
-                        338, 364, 389, 415, 440, 466, 491, 517, 542, 568
+                        338, 364, 389, 415, 440, 466, 491, 517, 542, 568 # mm
                     ]
-                ) / 100 / 2.54
+                ) / 10 / 2.54
             )
         }
     )
@@ -1371,7 +1371,7 @@ def _(np, opt_params, output_distance_data, plt, response_fun):
         output_distance_data["detector output"], 
         label="data"
     )
-    ds = np.linspace(0.1, 5.0)
+    ds = np.linspace(0.1, 25.0)
     plt.ylim(ymax=output_distance_data["detector output"].max() * 1.02)
     plt.plot(
         ds, [response_fun(d, *opt_params) for d in ds], label="model fit"
@@ -1393,7 +1393,7 @@ def _(box_dims, response_fun, root_scalar):
     def find_distance_to_detector(detetector_output, opt_params):
         root_finding_res = root_scalar(
             lambda d: response_fun(d, *opt_params) - detetector_output, 
-            bracket=[0.1, max(box_dims)], 
+            bracket=[0.1, max(box_dims) * 2.5], 
             method='brentq'
         )
         assert root_finding_res.converged
@@ -1404,13 +1404,7 @@ def _(box_dims, response_fun, root_scalar):
 
 @app.cell
 def _(find_distance_to_detector, opt_params):
-    find_distance_to_detector(150.0, opt_params)
-    return
-
-
-@app.cell
-def _(find_distance_to_detector, opt_params):
-    find_distance_to_detector(17.0, opt_params)
+    find_distance_to_detector(100.0, opt_params) # eyball: should be around 5
     return
 
 
@@ -1446,12 +1440,6 @@ def _(data, select_responsive_sensors, sensors):
     return
 
 
-@app.cell
-def _(sensor_to_loc):
-    sensor_to_loc
-    return
-
-
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
@@ -1472,7 +1460,9 @@ def _(
     sensor_to_loc,
     sensors,
 ):
-    def trad_localize(data, exp, sensors, opt_params):
+    def trad_localize(data, exp, sensors, opt_params, verbose=False):
+        if verbose:
+            print(f"expt {exp}")
         # what sensors are in the game?
         game_sensors = select_responsive_sensors(data, exp, sensors)
 
@@ -1484,6 +1474,9 @@ def _(
         if len(game_sensors) < 3:
             print(f"expt {exp} has only {len(game_sensors)} detectors with significant response.")
             game_sensors = list(data.loc[exp, sensors].sort_values(ascending=False).index[0:3])
+
+        if verbose:
+            print("sensor data in the game:", data.loc[exp, game_sensors])
     
         # predicted distance from these sensors
         measured_distances = [
@@ -1523,7 +1516,12 @@ def _(
 
         assert opt_res.success
 
-        return opt_res.x
+        xy_pred = opt_res.x
+
+        assert xy_pred[0] >= 0 and xy_pred[0] <= box_dims[0]
+        assert xy_pred[1] >= 0 and xy_pred[1] <= box_dims[1] 
+
+        return xy_pred
 
     trad_localize(data, 3, sensors, opt_params)
     return (trad_localize,)
@@ -1561,11 +1559,13 @@ def _(data, data_trad, np, viz_source_locs):
 
 
 @app.cell
-def _(data_loo, data_trad, plt, thing_to_color):
+def _(data_loo, data_trad, np, plt, thing_to_color):
+    _bins = np.linspace(0, max(data_loo["error"].max(), data_trad["error"].max()), 20)
+
     plt.figure()
-    plt.hist(data_loo["error"], alpha=0.5, label="ensemble of trees", color=thing_to_color["ML"])
+    plt.hist(data_loo["error"], alpha=0.5, label="ensemble of trees", color=thing_to_color["ML"], bins=_bins)
     plt.axvline(x=data_loo["error"].mean(), color=thing_to_color["ML"])
-    plt.hist(data_trad["error"], alpha=0.5, label="traditional localization", color=thing_to_color["trad"])
+    plt.hist(data_trad["error"], alpha=0.5, label="traditional localization", color=thing_to_color["trad"], bins=_bins)
     plt.axvline(x=data_trad["error"].mean(), color=thing_to_color["trad"])
 
     plt.xlabel("error [in]")
@@ -1573,11 +1573,6 @@ def _(data_loo, data_trad, plt, thing_to_color):
     plt.title("LOO-CV error")
     plt.legend()
     plt.show()
-    return
-
-
-@app.cell
-def _():
     return
 
 
