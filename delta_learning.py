@@ -1389,11 +1389,21 @@ def _(mo):
 
 
 @app.cell
-def _(box_dims, response_fun, root_scalar):
+def _():
+    return
+
+
+@app.cell
+def _(box_dims, np, response_fun, root_scalar):
     def find_distance_to_detector(detetector_output, opt_params):
+        # max distance is corner to corner
+        max_d = np.linalg.norm(box_dims)
+        if response_fun(max_d, *opt_params) > detetector_output:
+            return max_d    
+        
         root_finding_res = root_scalar(
             lambda d: response_fun(d, *opt_params) - detetector_output, 
-            bracket=[0.1, max(box_dims) * 2.5], 
+            bracket=[0.1, max_d], 
             method='brentq'
         )
         assert root_finding_res.converged
@@ -1440,6 +1450,23 @@ def _(data, select_responsive_sensors, sensors):
     return
 
 
+@app.cell
+def _(Nds):
+    def select_top_three_sensors(data, exp, sensors):
+        output_minus_Nds = data.loc[0, sensors].copy()
+        for sensor in sensors:
+            output_minus_Nds[sensor] -= Nds[sensor]
+        return list(output_minus_Nds.sort_values(ascending=False).index[0:3])
+
+    return (select_top_three_sensors,)
+
+
+@app.cell
+def _(data, select_top_three_sensors, sensors):
+    select_top_three_sensors(data, 20, sensors)
+    return
+
+
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
@@ -1457,6 +1484,7 @@ def _(
     np,
     opt_params,
     select_responsive_sensors,
+    select_top_three_sensors,
     sensor_to_loc,
     sensors,
 ):
@@ -1470,10 +1498,10 @@ def _(
             print(f"expt {exp} has no detectors with significant response.")
             return np.array([np.nan, np.nan])
 
-        # just select three highest
+        # just select three highest above Nds
         if len(game_sensors) < 3:
             print(f"expt {exp} has only {len(game_sensors)} detectors with significant response.")
-            game_sensors = list(data.loc[exp, sensors].sort_values(ascending=False).index[0:3])
+            game_sensors = select_top_three_sensors(data, exp, sensors)
 
         if verbose:
             print("sensor data in the game:", data.loc[exp, game_sensors])
@@ -1558,9 +1586,26 @@ def _(data, data_trad, np, viz_source_locs):
     return
 
 
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ...when the errors are huge.
+    """)
+    return
+
+
+@app.cell
+def _(data, data_trad, viz_source_locs):
+    _ids_sources_to_viz = data_trad["error"] > 20.0
+    viz_source_locs(data, ids=_ids_sources_to_viz)
+    return
+
+
 @app.cell
 def _(data_loo, data_trad, np, plt, thing_to_color):
     _bins = np.linspace(0, max(data_loo["error"].max(), data_trad["error"].max()), 20)
+
+    assert data_loo.shape[0] == data_trad.shape[0] # for comparison of errors
 
     plt.figure()
     plt.hist(data_loo["error"], alpha=0.5, label="ensemble of trees", color=thing_to_color["ML"], bins=_bins)
