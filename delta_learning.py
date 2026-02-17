@@ -717,14 +717,14 @@ def _(ExtraTreesRegressor, LeaveOneOut, calculate_errors, np, sensors):
 
 @app.cell
 def _(mo):
-    run_loo_cv = mo.ui.checkbox(label="run LOO CV?")
-    run_loo_cv
-    return (run_loo_cv,)
+    don_run_loo_cv = mo.ui.checkbox(label="don't run LOO CV?")
+    don_run_loo_cv
+    return (don_run_loo_cv,)
 
 
 @app.cell
-def _(data, do_loo_cv, run_loo_cv):
-    if run_loo_cv.value:
+def _(data, do_loo_cv, don_run_loo_cv):
+    if not don_run_loo_cv.value:
         data_loo = do_loo_cv(data)
     data_loo
     return (data_loo,)
