@@ -607,7 +607,7 @@ def _(data, np, plt, sns):
         plt.show()
 
     correlation_matrix(data.iloc[:,3::])
-    return
+    return (correlation_matrix,)
 
 
 @app.cell(hide_code=True)
@@ -1449,7 +1449,7 @@ def _(data, select_responsive_sensors, sensors):
 def _(data, select_responsive_sensors, sensors):
     ids_no_signal = [exp for exp in range(data.shape[0]) if len(select_responsive_sensors(data, exp, sensors)) == 0]
     ids_no_signal # exclude these for error analysis
-    return (ids_no_signal,)
+    return
 
 
 @app.cell
@@ -1466,6 +1466,22 @@ def _(Nds):
 @app.cell
 def _(data, select_top_three_sensors, sensors):
     select_top_three_sensors(data, 20, sensors)
+    return
+
+
+@app.cell
+def _(np, select_top_three_sensors, sensor_to_loc):
+    def triangulation(data, exp, sensors, opt_params):
+        game_sensors = select_top_three_sensors(data, exp, sensors)
+        wts = data.loc[exp, game_sensors] / data.loc[exp, game_sensors].sum()
+        return np.sum([np.array(sensor_to_loc[sensor]) * wts[sensor] for sensor in game_sensors], axis=0)
+
+    return (triangulation,)
+
+
+@app.cell
+def _(data, opt_params, sensors, triangulation):
+    triangulation(data, 0, sensors, opt_params)
     return
 
 
@@ -1573,6 +1589,19 @@ def _(calculate_errors, data, opt_params, sensors, trad_localize):
     return (data_trad,)
 
 
+@app.cell
+def _(calculate_errors, data, opt_params, sensors, triangulation):
+    xy_triangulation_preds = [triangulation(data, exp, sensors, opt_params) for exp in range(data.shape[0])]
+
+    data_triangulation = data.copy()
+    data_triangulation["x_s_pred"] = [xy_triangulation_preds[exp][0] for exp in range(data.shape[0])]
+    data_triangulation["y_s_pred"] = [xy_triangulation_preds[exp][1] for exp in range(data.shape[0])]
+
+    calculate_errors(data_triangulation)
+    data_triangulation
+    return (data_triangulation,)
+
+
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
@@ -1598,14 +1627,25 @@ def _(mo):
 
 @app.cell
 def _(data, data_trad, viz_source_locs):
-    _ids_sources_to_viz = data_trad["error"] > 20.0
+    _ids_sources_to_viz = data_trad.index[data_trad["error"] > 20.0]
     viz_source_locs(data, ids=_ids_sources_to_viz)
+    _ids_sources_to_viz
     return
 
 
 @app.cell
-def _(data, data_loo, data_trad, ids_no_signal, np, plt, thing_to_color):
-    expts_to_compare = [exp for exp in range(data.shape[0]) if not exp in ids_no_signal]
+def _(
+    data,
+    data_loo,
+    data_trad,
+    data_triangulation,
+    ids_wrong,
+    np,
+    plt,
+    theme_colors,
+    thing_to_color,
+):
+    expts_to_compare = [exp for exp in range(data.shape[0]) if not exp in ids_wrong]
 
     _bins = np.linspace(0, max(data_loo["error"].max(), data_trad["error"].max()), 20)
 
@@ -1617,17 +1657,30 @@ def _(data, data_loo, data_trad, ids_no_signal, np, plt, thing_to_color):
         alpha=0.5, label="ensemble of trees", color=thing_to_color["ML"], bins=_bins
     )
     plt.axvline(x=data_loo.loc[expts_to_compare, "error"].mean(), color=thing_to_color["ML"])
+
     plt.hist(
         data_trad.loc[expts_to_compare, "error"], 
         alpha=0.5, label="traditional localization", color=thing_to_color["trad"], bins=_bins
     )
     plt.axvline(x=data_trad.loc[expts_to_compare, "error"].mean(), color=thing_to_color["trad"])
 
+    plt.hist(
+        data_triangulation.loc[expts_to_compare, "error"], 
+        alpha=0.5, label="triangulation", color=theme_colors[3], bins=_bins
+    )
+    plt.axvline(x=data_triangulation.loc[expts_to_compare, "error"].mean(), color=theme_colors[3])
+
     plt.xlabel("error [in]")
     plt.ylabel("# experiments")
     plt.title("LOO-CV error")
     plt.legend()
     plt.show()
+    return
+
+
+@app.cell
+def _(correlation_matrix):
+    correlation_matrix
     return
 
 
