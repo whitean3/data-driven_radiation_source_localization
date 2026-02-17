@@ -18,6 +18,7 @@ def _():
     import matplotlib.transforms as transforms
     import matplotlib.font_manager as fm
     from sklearn.metrics import ConfusionMatrixDisplay
+    import scipy.optimize as optimize
     import matplotlib as mpl
     import seaborn as sns
     plt.style.use('rose-pine-dawn.mplstyle') # https://github.com/h4pZ/rose-pine-matplotlib/tree/main/themes
@@ -31,18 +32,17 @@ def _():
         Ellipse,
         ExtraTreesClassifier,
         ExtraTreesRegressor,
-        IsolationForest,
         LeaveOneOut,
         csv,
         math,
         mo,
         np,
+        optimize,
         os,
         patches,
         pd,
         plt,
         sns,
-        train_test_split,
         transforms,
     )
 
@@ -342,14 +342,31 @@ def _(
             label="sensor"
         )
 
+        # sensor names
+        for sensor in sensors:
+            plt.annotate(
+                f"{sensor}",
+                (sensor_to_loc[sensor][0], sensor_to_loc[sensor][1]),
+                xytext=(5, 5),
+                textcoords="offset points", 
+                ha='left',
+                va='bottom'
+            )
+
         # source locations
         plt.scatter(
             data.loc[ids, "x_s"], data.loc[ids, "y_s"], 
-            clip_on=False, color=thing_to_color["true source loc"], s=65, marker="o"
+            clip_on=False, color=thing_to_color["true source loc"], s=65, marker="o", 
+            label="radiation source"
         )
 
-    
         plt.title(title)
+
+        # legend w unique entries
+        handles, labels = plt.gca().get_legend_handles_labels()
+        by_label = dict(zip(labels, handles))
+        plt.legend(by_label.values(), by_label.keys(), bbox_to_anchor=(1.3, 0.5), loc='upper left', borderaxespad=0)
+    
         plt.show()
 
     viz_source_locs(data)
@@ -365,17 +382,19 @@ def _(mo):
 @app.cell
 def _(draw_obstacles, plt):
     def setup_environment(box_dims):
-        plt.figure()
+        fig, ax = plt.subplots()
     
-        draw_obstacles(plt.gca())
+        draw_obstacles(ax)
     
-        plt.gca().set_aspect('equal', 'box')
+        ax.set_aspect('equal', 'box')
     
         plt.xlabel("x [in]")
         plt.ylabel("y [in]")
     
         plt.xlim(0, box_dims[0])
         plt.ylim(0, box_dims[1])
+
+        return fig, ax
     return (setup_environment,)
 
 
@@ -467,7 +486,7 @@ def _(
     setup_environment,
     thing_to_color,
 ):
-    def viz_sensor_readout(data, exp, max_response=75.0):
+    def viz_sensor_readout(data, exp, max_response=75.0, label_sensors=False):
         setup_environment(box_dims)
 
         # plot sensors; color acc to response
@@ -486,6 +505,17 @@ def _(
             label="sensor"
         )
 
+        if label_sensors:
+            for sensor in sensors:
+                plt.annotate(
+                    f"{sensor}",
+                    (sensor_to_loc[sensor][0], sensor_to_loc[sensor][1]),
+                    xytext=(5, 5),
+                    textcoords="offset points", 
+                    ha='left',
+                    va='bottom'
+                )
+
         plt.colorbar(label="count rate [CPS]", extend="max")
 
         # plot source location
@@ -503,7 +533,7 @@ def _(
 
         plt.show()
 
-    viz_sensor_readout(data, 11)
+    viz_sensor_readout(data, 11, label_sensors=True)
     return (viz_sensor_readout,)
 
 
@@ -564,10 +594,12 @@ def _(data, np, plt, sns):
         cmap = sns.color_palette("vlag", as_cmap=True)
 
         # Draw the heatmap with the mask and correct aspect ratio
-        sns.heatmap(corr, mask=mask, cmap=cmap, vmax=.3, center=0,
-                    square=True, linewidths=.5, cbar_kws={"shrink": .5})
+        sns.heatmap(corr, mask=mask, cmap=cmap, vmax=.3, vmin=-0.3, center=0,
+                    square=True, linewidths=.5, cbar_kws={"shrink": .5}
+        )
         plt.title("Detector Correlation Matrix")
         plt.show()
+    
     correlation_matrix(data.iloc[:,3::])
     return
 
@@ -692,21 +724,11 @@ def _(mo):
 
 
 @app.cell
-def _(data_loo):
+def _(box_dims, data_loo, np):
     mean_error = data_loo["error"].mean()
-    return (mean_error,)
-
-
-@app.cell
-def _(mean_error):
     print("mean error: ", mean_error, "in.")
-    return
-
-
-@app.cell
-def _(box_dims, mean_error):
-    print("from area perspective: ", mean_error ** 2 / (box_dims[0] * box_dims[1]) * 100, "% error")
-    return
+    print("\tfrom area perspective: ", np.pi * mean_error ** 2 / (box_dims[0] * box_dims[1]) * 100, "% of box")
+    return (mean_error,)
 
 
 @app.cell
@@ -762,6 +784,7 @@ def _(box_dims, data_loo, plt):
         ax2.legend(title=f"error = {y_err:.2f} in")
 
         plt.show()
+    
     xy_parity_plot(data_loo)
     return (xy_parity_plot,)
 
@@ -774,10 +797,20 @@ def _(
     plt,
     sensor_to_loc,
     sensors,
+    setup_environment,
     thing_to_color,
 ):
     def explain_errors(data_loo):
-        fig, ax = plt.subplots()
+        fig, ax = setup_environment(box_dims)
+        draw_obstacles(ax)
+
+        # plot sensors
+        plt.scatter(
+            [sensor_to_loc[sensor][0] for sensor in sensors],
+            [sensor_to_loc[sensor][1] for sensor in sensors],
+            color=thing_to_color["sensor"], s=50, edgecolor="black", marker="s", label="sensor",
+            clip_on=False
+        )
 
         # source locs. color by error.
         plt.scatter(
@@ -803,26 +836,9 @@ def _(
                 color="gray", linestyle="--", alpha=0.3
             )
 
+        handles, labels = plt.gca().get_legend_handles_labels()
+        plt.legend(handles[-3:], labels[-3:], bbox_to_anchor=(1.3, 0.5), loc='upper left', borderaxespad=0)
 
-        # plot sensors
-        plt.scatter(
-            [sensor_to_loc[sensor][0] for sensor in sensors],
-            [sensor_to_loc[sensor][1] for sensor in sensors],
-            color=thing_to_color["sensor"], s=50, edgecolor="black", marker="s", label="sensor",
-            clip_on=False
-        )
-
-        # plot obstacles TODO
-
-        plt.gca().set_aspect('equal', 'box')
-
-        plt.xlabel("x [in]")
-        plt.ylabel("y [in]")
-        plt.xlim(0, box_dims[0])
-        plt.ylim(0, box_dims[1])
-
-        plt.legend(bbox_to_anchor=(1.3, 0.5), loc='upper left', borderaxespad=0)
-        draw_obstacles(plt.gca())
         plt.show()
 
     explain_errors(data_loo)
@@ -870,19 +886,22 @@ def _(
     box_dims,
     data_loo,
     draw_confidence_ellipse,
+    draw_obstacles,
     np,
     plt,
     sensor_colormap,
     sensor_to_loc,
     sensors,
+    setup_environment,
     theme_colors,
     thing_to_color,
 ):
     def viz_prediction(data_loo, exp, n_samples=25, incl_ellipse=True):
         max_response = 75.0 
 
-        fig, ax = plt.subplots()
-        ax.set_aspect('equal', 'box')
+        fig, ax = setup_environment(box_dims)
+        draw_obstacles(ax)
+    
         # source locs. color by error.
         plt.scatter(
             data_loo.loc[exp, "x_s"], data_loo.loc[exp, "y_s"],
@@ -923,21 +942,13 @@ def _(
         if incl_ellipse:
             draw_confidence_ellipse(xs_preds, ys_preds, ax, facecolor=thing_to_color["pred source loc"], alpha=0.2)
             draw_confidence_ellipse(xs_preds, ys_preds, ax, n_std=2.0, facecolor=thing_to_color["pred source loc"], alpha=0.2)
-
-
-        # plot obstacles TODO
-
-        plt.gca().set_aspect('equal', 'box')
-        plt.xlabel("x [in]")
-        plt.ylabel("y [in]")
-        plt.xlim(0, box_dims[0])
-        plt.ylim(0, box_dims[1])
-
-        plt.legend(bbox_to_anchor=(1.3, 0.5), loc='upper left', borderaxespad=0)
+    
+        handles, labels = plt.gca().get_legend_handles_labels()
+        plt.legend(handles[-3:], labels[-3:], bbox_to_anchor=(1.3, 0.5), loc='upper left', borderaxespad=0)
 
         plt.show()
 
-    _exp = 6
+    _exp = 7
     viz_prediction(data_loo, _exp, n_samples=10)
     return
 
@@ -972,12 +983,6 @@ def _(data, n_sensors, np, plt, sensors, train_tree_ensemble):
 
 
 @app.cell
-def _(tree_ensemble):
-    tree_ensemble.feature_importances_
-    return
-
-
-@app.cell
 def _(
     box_dims,
     data,
@@ -986,16 +991,14 @@ def _(
     sensor_colormap,
     sensor_to_loc,
     sensors,
+    setup_environment,
     tree_ensemble,
 ):
     def viz_importance(data):
-
-        plt.figure()
-        draw_obstacles(plt.gca())
+        fig, ax = setup_environment(box_dims)
+        draw_obstacles(ax)
 
         # plot sensors
-
-
         plt.scatter(
             [sensor_to_loc[sensor][0] for sensor in sensors],
             [sensor_to_loc[sensor][1] for sensor in sensors],
@@ -1008,13 +1011,8 @@ def _(
             cmap=sensor_colormap
         )
 
-        #plt.scatter(data["x_s"], data["y_s"], clip_on=False, color=thing_to_color["true source loc"], s=65, marker="o")
         plt.colorbar(label="Importance", extend="max")
-        plt.gca().set_aspect('equal', 'box')
-        plt.xlabel("x [in]")
-        plt.ylabel("y [in]")
-        plt.xlim(0, box_dims[0])
-        plt.ylim(0, box_dims[1])
+    
         plt.title("Sensor Impotance")
         plt.show()
 
@@ -1138,42 +1136,12 @@ def _(pd, raw_background_data):
 
 @app.cell
 def _(data_bkg):
-    def find_avg_bkgs(data_bkg):
-        avg_bkgs = []
-        for det in data_bkg:
-            avg_bkgs.append(sum(data_bkg[det][:])/len(data_bkg[det][:]))
-        return avg_bkgs
-    avg_bkgs = find_avg_bkgs(data_bkg)
-    avg_bkgs
-    return (avg_bkgs,)
-
-
-@app.cell
-def _(avg_bkgs, data_bkg):
-    print(data_bkg['16513']-avg_bkgs[1])
-    return
-
-
-@app.cell
-def _(avg_bkgs, data_bkg):
-    bkg_var = []
-    for _det in data_bkg:
-        bkg_var.append(sum((data_bkg[_det]-avg_bkgs[0])**2)/(len(data_bkg[_det])-1))
-        print(f"Detector: {_det} variance is {sum((data_bkg[_det]-avg_bkgs[0])**2)/len(data_bkg[_det])}")
-    return (bkg_var,)
-
-
-@app.cell
-def _(bkg_var):
-    bkg_var
-    return
-
-
-@app.cell
-def _(bkg_var, np):
-    bkg_std = np.sqrt(bkg_var)
-    bkg_std
-    return
+    # per sensor background stats
+    bkg_avg = data_bkg.mean()
+    bkg_std = data_bkg.std()
+    bkg_var = data_bkg.var()
+    bkg_avg
+    return bkg_avg, bkg_var
 
 
 @app.cell
@@ -1291,15 +1259,12 @@ def _(data_c, do_loo_cv_classification):
 
 
 @app.cell
-def _(data_loo_c):
-    def _():
-        for i in range(1,len(data_loo_c)):
-            if data_loo_c["background"][i] != data_loo_c['pred_safe'][i]:
-                print(data_loo_c["pred_safe"][i])
-                print(i)
+def _(data, data_loo_c, viz_source_locs):
+    incorrect_expts = data_loo_c.index[
+        data_loo_c["background"] != data_loo_c["pred_safe"]
+    ]
 
-
-    _()
+    viz_source_locs(data, ids=incorrect_expts, title="incorrect experiments")
     return
 
 
@@ -1315,12 +1280,6 @@ def _(ConfusionMatrixDisplay, data_loo_c, plt):
     cm.ax_.set_ylabel('true label', fontsize=20)
     cm.im_.colorbar.set_label('# instances', fontsize=18)
     plt.show()
-    return
-
-
-@app.cell
-def _():
-    5/75
     return
 
 
@@ -1352,241 +1311,74 @@ def _(data_loo_c, disagreement_selector, viz_sensor_readout):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(
-        r"""
-    # ☢️ detection of sensor tampering
-
-    suppose we think a source is present, and we want to predict its location.
-    now, we use anomaly detector to make sure a sensor is not being tampered with.
-
-    ## read in sensor tampering data.
-    """
-    )
+    mo.md(r"""# ☢️ triangulation""")
     return
 
 
 @app.cell
-def _(folder_path, n_sensors, os, read_detector_outputs):
-    def read_tampering_data():
-        n_expts = 10
-        dets = [12, 13, 19] # detectors tampered with
-        tamp_data = {
-            "12" : {},
-            "13" : {},
-            "19" : {}
-        }
-        for det in dets:
-            for exp in range(1, n_expts+1):
-                filename = f"det{det}_tamp{exp}.csv"
-                file_path = os.path.join(folder_path, filename)
-                print(f"\nReading {filename}...")
-                # Use the filename (or file_path) as the key
-                tamp_data[f"{det}"][exp] = read_detector_outputs(file_path)
-
-            # unique sensors
-            assert tamp_data[f"{det}"][exp]["SN"].nunique() == n_sensors
-        return tamp_data
-
-    raw_tampering_data = read_tampering_data()
-    raw_tampering_data
-    return (raw_tampering_data,)
-
-
-@app.cell
-def _(raw_tampering_data):
-    raw_tampering_data
-    return
-
-
-@app.cell
-def _(pd):
-    tampered_source_locs = pd.DataFrame(
-        {
-            'tampered_sensor' : ['16512', '16512', '16512', '16512', '16512', '16512', '16512', '16512', '16512', 
-                                 '16512', '16513', '16513', '16513', '16513', '16513', '16513', '16513', '16513', 
-                                 '16513', '16513', '16519', '16519', '16519', '16519', '16519', '16519', '16519', 
-                                 '16519', '16519', '16519'
-            ],
-            'x_s' : [39.0, 37.0, 35.0, 33.0, 31.0, 40.0, 38.0, 36.0, 34.0, 32.0, 18.0, 20.0, 21.0, 22.0, 
-                    21.0, 23.0, 24.0, 24.0, 23.0, 18.0, 7.0, 7.0, 7.0, 9.0, 10.0, 10.0, 10.0, 12.0, 12.0, 12.0
-            ],
-            'y_s' : [18.0, 18.0, 18.0, 18.0, 18.0, 15.0, 15.0, 15.0, 15.0, 15.0, 17.0, 15.0, 12.0, 10.0, 
-                    7.0, 5.0, 8.0, 13.0, 16.0, 10.0, 29.0, 26.0, 24.0, 22.0, 25.0, 28.0, 31.0, 29.0, 26.0, 23.0
-            ]
-        }
-    )
-    return (tampered_source_locs,)
-
-
-@app.cell
-def _(pd, raw_tampering_data, sensors, tampered_source_locs):
-    def format_tampering_data(raw_tampering_data):
-        data = pd.DataFrame(columns=sensors)
-        for tamp in raw_tampering_data:
-            for exp in range(1,len(raw_tampering_data[tamp])+1):
-                df = raw_tampering_data[tamp][exp]
-                new_row = {sensor : grab_sensor_response(df,sensor) for sensor in sensors}
-                data.loc[len(data)] = new_row
-        data = pd.concat([tampered_source_locs, data], axis=1)
-        return data
-
-    data_tamp = format_tampering_data(raw_tampering_data)
-    data_tamp
-    return (data_tamp,)
-
-
-@app.cell
-def _(data_tamp, viz_source_locs):
-    viz_source_locs(data_tamp)
-    return
-
-
-@app.cell
-def _(data, viz_source_locs):
-    viz_source_locs(data)
-    return
-
-
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(
-        r"""
-    ## anomaly detection
-    train isolation forest on normal data. get anomaly scores for normal and tampering data.
-    """
-    )
-    return
-
-
-@app.cell
-def _(IsolationForest, pd, plt, sensors, sns, train_test_split):
-    def train_test_anomaly_detection(data, data_tamp):
-        # split normal data into train and test
-        data_train, data_test = train_test_split(data, test_size=0.5, shuffle=True)
-
-        iso_f = IsolationForest()
-        iso_f.fit(data_train[sensors])
-
-        ascore_normal = iso_f.decision_function(data_test[sensors])
-        a_normal = iso_f.predict(data_test[sensors])
-        ascore_tamp   = iso_f.decision_function(data_tamp[sensors])
-        a_tamp = iso_f.predict(data_tamp[sensors])
-
-        adata = pd.concat(
-            [
-                pd.DataFrame({"anomaly score": ascore_normal, 'sensor tampering': 'no', 'anomaly': a_normal}),
-                pd.DataFrame({"anomaly score": ascore_tamp,   'sensor tampering': 'yes', 'anomaly': a_tamp})
-            ]
-        )
-
-        sns.kdeplot(data=adata, x="anomaly score", hue="sensor tampering", common_norm=False)
-        # plt.axvline(iso_f.offset_, color="gray", linestyle="--", zorder=1)
-        plt.show()
-        return adata
-    return (train_test_anomaly_detection,)
-
-
-@app.cell
-def _(data, data_tamp, train_test_anomaly_detection):
-    anomaly_data = train_test_anomaly_detection(data, data_tamp)
-    return (anomaly_data,)
-
-
-@app.cell
-def _(anomaly_data):
-    anomaly_data["anomaly"].value_counts()
-    return
-
-
-@app.cell
-def _(anomaly_data):
-    anomaly_data["anomaly"]
-    return
-
-
-@app.cell
-def _(ConfusionMatrixDisplay, data_loo_c):
-    ConfusionMatrixDisplay.from_predictions(
-        data_loo_c["background"].values, data_loo_c["pred_safe"].values,
-        text_kw={'fontsize': 22}
-    )
-    return
-
-
-@app.cell
-def _(mo):
-    mo.md(r"""#Traingulation""")
-    return
-
-
-@app.cell
-def _(avg_bkgs, np):
+def _(bkg_avg, np):
     # Calculated the significant threshold for each detector based on the measured background
-    Nds = 4.65*np.sqrt(avg_bkgs) +2.71
-    return (Nds,)
-
-
-@app.cell
-def _(Nds):
-    Nds_dict = {
-        '16518':Nds[0],
-        '16517':Nds[1],
-        '16516':Nds[2],
-        '16519':Nds[3],
-        '16520':Nds[4],
-        '16521':Nds[5],
-        '16512':Nds[6],
-        '16513':Nds[7]
-    }
-    return (Nds_dict,)
-
-
-@app.cell
-def _(avg_bkgs):
-    avg_bkgs
+    Nds = 4.65 * np.sqrt(bkg_avg) + 2.71
+    Nds
     return
 
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""### Response to distance conversion""")
+    mo.md(
+        r"""
+    ## calibration curve
+
+    output of sensor as a function of distance from source.
+    """
+    )
+    return
+
+
+@app.cell
+def _(np, pd):
+    output_distance_data = pd.DataFrame(
+        {
+            "detector output": np.array(
+                [366.832, 325.406, 236.634, 157.014, 110.397, 103.229, 
+                 50.095, 54.271, 38.758, 42.934, 34.583, 33.39, 35.775, 22.655, 
+                 16.692, 22.059, 23.848, 23.848, 25.637, 15.5, 13.115
+                ]
+            ),
+            "distance [mm]": np.array(
+                [
+                    26, 34, 60, 85, 136, 161, 186, 237, 262, 288, 313,
+                    338, 364, 389, 415, 440, 466, 491, 517, 542, 568
+                ]
+            )
+        }
+    )
+
+    output_distance_data
+    return (output_distance_data,)
+
+
+@app.cell
+def _(np, opt_params, output_distance_data, plt, response_fun):
+    plt.figure()
+    plt.xlabel("distance [mm]")
+    plt.ylabel("detector output")
+    plt.scatter(
+        output_distance_data["detector output"], 
+        output_distance_data["distance [mm]"]
+    )
+    ds = np.array(range(15, 600))
+    plt.ylim(ymax=output_distance_data["detector output"].max() * 1.02)
+    plt.plot(
+        ds, [response_fun(d, *opt_params) for d in ds]
+    )
     return
 
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""Data:""")
+    mo.md(r"""fit to detector response function.""")
     return
-
-
-@app.cell
-def _(np):
-    m = np.array([366.832,325.406,236.634, 157.014,110.397, 103.229, 50.095, 54.271, 38.758, 42.934, 34.583, 33.39, 35.775, 22.655, 16.692, 22.059, 23.848, 23.848, 25.637, 15.5, 13.115])
-    return (m,)
-
-
-@app.cell
-def _(np):
-    d = np.array([26,34,60,85,136,161,186,237,262,288,313,338,364,389,415,440,466,491,517,542,568])
-    return (d,)
-
-
-@app.cell
-def _(d, m, plt):
-    plt.scatter(d,m/max(m))
-    return
-
-
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""Data fit to detector response function.""")
-    return
-
-
-@app.cell
-def _():
-    import scipy.optimize as optimize
-    return (optimize,)
 
 
 @app.cell
@@ -1594,48 +1386,22 @@ def _(np):
     def response_fun(d, S, e_ip, a, b):
         #a = 14
         #b = 28
-        alpha = a/(2*d)
-        beta = b/(2*d)
-        numerator = alpha * beta
-        denominator = np.sqrt(1 + alpha**2 + beta**2)
-        omega = 4*np.arctan(numerator/denominator) 
+        alpha = a / (2 * d)
+        beta = b / (2 * d)
+        omega = 4 * np.arctan(alpha * beta / np.sqrt(1 + alpha**2 + beta**2)) 
 
-        N = (S*0.3*omega)/(4*np.pi) + 12
-        return N
+        return (S * 0.3 * omega) / (4 * np.pi) + 12
     return (response_fun,)
 
 
 @app.cell
-def _(d, m, np, optimize, response_fun):
-    fit_results = optimize.curve_fit(response_fun, d, m, bounds=(0,np.inf), p0=[15.984e+6, 0.3, 14, 28])
-    return (fit_results,)
-
-
-@app.cell
-def _(fit_results):
-    print(fit_results[0])
-    return
-
-
-@app.cell
-def _(np):
-    ds = np.array(range(26,600))
-    return (ds,)
-
-
-@app.cell
-def _(ds, fit_results, response_fun):
-    y_pred = [response_fun(ds[i], fit_results[0][0],  fit_results[0][1],  fit_results[0][2],  fit_results[0][3]) for i in range(len(ds))]
-    return (y_pred,)
-
-
-@app.cell
-def _(d, ds, m, plt, y_pred):
-    plt.plot(ds/10,y_pred)
-    plt.scatter(d/10,m)
-    plt.xlabel("Distance (cm)")
-    plt.ylabel("Count Rate (#/min)")
-    return
+def _(np, optimize, output_distance_data, response_fun):
+    fit_results = optimize.curve_fit(
+        response_fun, output_distance_data["distance [mm]"], output_distance_data["detector output"], 
+        bounds=(0, np.inf), p0=[15.984e+6, 0.3, 14, 28]
+    )
+    opt_params = fit_results[0]
+    return (opt_params,)
 
 
 @app.cell(hide_code=True)
@@ -1708,8 +1474,8 @@ def _(data):
 
 
 @app.cell
-def _(np, response_to_dist, sensor_to_loc):
-    from scipy.optimize import minimize
+def _(minimize, np, response_to_dist, sensor_to_loc):
+
     def predict_loc_LSE(measurements, Nds_by_sensor):
         # Ensure measurement index i corresponds to the same sensor i
         sensor_ids = sorted(sensor_to_loc.keys(), key=lambda s: int(s))
@@ -1769,6 +1535,7 @@ def _(Nds_dict, data, predict_loc_LSE, sorted_responses):
                 LSE_preds.append(None)
                 print("exp:", i)
         return LSE_preds, results
+    
     LSE_preds, Full_LSE_results = localize(data, Nds_dict)
     return Full_LSE_results, LSE_preds
 
