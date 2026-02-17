@@ -17,8 +17,7 @@ def _():
     from matplotlib.patches import Ellipse
     import matplotlib.transforms as transforms
     import matplotlib.font_manager as fm
-    from scipy.optimize import root_scalar
-    from scipy.optimize import differential_evolution
+    from scipy.optimize import root_scalar, minimize, differential_evolution
     from sklearn.metrics import ConfusionMatrixDisplay
     import scipy.optimize as optimize
     import matplotlib as mpl
@@ -62,7 +61,9 @@ def _(sns):
         'lead': theme_colors[7],
         'cardboard': theme_colors[6],
         'MDF': theme_colors[0],
-        'pine': theme_colors[1]
+        'pine': theme_colors[1],
+        'ML': theme_colors[0],
+        'trad': theme_colors[1]
     }
     sensor_colormap = "Purples"
 
@@ -643,7 +644,19 @@ def _(mo):
 
 
 @app.cell
-def _(ExtraTreesRegressor, LeaveOneOut, np, sensors):
+def _(np):
+    def calculate_errors(data):
+        data["error_x"] = np.abs(data["x_s"] - data["x_s_pred"])
+        data["error_y"] = np.abs(data["y_s"] - data["y_s_pred"])
+        data["error"] = np.sqrt(
+            (data["x_s"] - data["x_s_pred"]) ** 2 + (data["y_s"] - data["y_s_pred"]) ** 2
+        )
+
+    return (calculate_errors,)
+
+
+@app.cell
+def _(ExtraTreesRegressor, LeaveOneOut, calculate_errors, np, sensors):
     # a multi-output tree ensemble model. maps 8D vectors to 2D vectors.
     #  maps sensor network readout to source location
     def do_loo_cv(data, n_estimators=100, verbose=True, very_verbose=False):
@@ -695,11 +708,7 @@ def _(ExtraTreesRegressor, LeaveOneOut, np, sensors):
             ]
 
         # DONE! compute and store error = distance from true to predicted source
-        data_loo["error_x"] = np.abs(data_loo["x_s"] - data_loo["x_s_pred"])
-        data_loo["error_y"] = np.abs(data_loo["y_s"] - data_loo["y_s_pred"])
-        data_loo["error"] = np.sqrt(
-            (data_loo["x_s"] - data_loo["x_s_pred"]) ** 2 + (data_loo["y_s"] - data_loo["y_s_pred"]) ** 2
-        )
+        calculate_errors(data_loo)
 
         return data_loo
 
@@ -1153,57 +1162,7 @@ def _(data_bkg):
     bkg_std = data_bkg.std()
     bkg_var = data_bkg.var()
     bkg_avg
-    return bkg_avg, bkg_var
-
-
-@app.cell
-def _(mo):
-    mo.md(r"""
-    Looks at the statistical anomaly detection
-    """)
-    return
-
-
-@app.cell
-def _(avg_bkgs, data_bkg, np):
-    _c = 0
-    _d = 0
-    _a = 0 
-    _t = 0
-    fp_rates = []
-    for det in data_bkg:
-        print(f"Average Bkg count rate for detector: {det} is {avg_bkgs[_c]}")
-        print(f"Anomalous count rate threshold, nd, is {(4.65*np.sqrt(60*avg_bkgs[_c])+2.71)/60+avg_bkgs[_c]}")
-        for i in range(len(data_bkg[det])):
-            _t += 1
-            if data_bkg[det][i]>((4.65*np.sqrt(60*avg_bkgs[_c])+2.71)/60+avg_bkgs[_c]):
-                _a+=1
-                _d+=1
-                print(f"{det}_{i}:{data_bkg[det][i]}")
-        print(f"Number of false positives for detector: {det} is {_a}")
-        fp_rates.append(_a/len(data_bkg[det]))
-        _a = 0
-        _c += 1
-    print(f"Total false positive percent: {(_d/_t)*100}%")
-    return (fp_rates,)
-
-
-@app.cell
-def _(fp_rates):
-    fp_rates
-    return
-
-
-@app.cell
-def _(fp_rates, plt):
-    plt.bar(range(len(fp_rates)), fp_rates)
-    return
-
-
-@app.cell
-def _(bkg_var, fp_rates, plt):
-    plt.bar(range(len(fp_rates)), bkg_var)
-    return
+    return (bkg_avg,)
 
 
 @app.cell(hide_code=True)
@@ -1356,13 +1315,13 @@ def _(np, pd):
                  16.692, 22.059, 23.848, 23.848, 25.637, 15.5, 13.115
                 ]
             ),
-            "distance [cm]": np.array(
+            "distance [in]": np.array(
                 np.array(
                     [
                         26, 34, 60, 85, 136, 161, 186, 237, 262, 288, 313,
                         338, 364, 389, 415, 440, 466, 491, 517, 542, 568
                     ]
-                ) / 100
+                ) / 100 / 2.54
             )
         }
     )
@@ -1395,7 +1354,7 @@ def _(np):
 @app.cell
 def _(np, optimize, output_distance_data, response_fun):
     fit_results = optimize.curve_fit(
-        response_fun, output_distance_data["distance [cm]"], output_distance_data["detector output"], 
+        response_fun, output_distance_data["distance [in]"], output_distance_data["detector output"], 
         bounds=(0, np.inf), p0=[15.984e+6, 0.3, 14, 28]
     )
     opt_params = fit_results[0]
@@ -1405,14 +1364,14 @@ def _(np, optimize, output_distance_data, response_fun):
 @app.cell
 def _(np, opt_params, output_distance_data, plt, response_fun):
     plt.figure()
-    plt.xlabel("distance [cm]")
+    plt.xlabel("distance [in]")
     plt.ylabel("detector output")
     plt.scatter(
-        output_distance_data["distance [cm]"],
+        output_distance_data["distance [in]"],
         output_distance_data["detector output"], 
         label="data"
     )
-    ds = np.linspace(0.1, 6.0)
+    ds = np.linspace(0.1, 5.0)
     plt.ylim(ymax=output_distance_data["detector output"].max() * 1.02)
     plt.plot(
         ds, [response_fun(d, *opt_params) for d in ds], label="model fit"
@@ -1430,11 +1389,11 @@ def _(mo):
 
 
 @app.cell
-def _(response_fun, root_scalar):
+def _(box_dims, response_fun, root_scalar):
     def find_distance_to_detector(detetector_output, opt_params):
         root_finding_res = root_scalar(
             lambda d: response_fun(d, *opt_params) - detetector_output, 
-            bracket=[0.1, 10.0], 
+            bracket=[0.1, max(box_dims)], 
             method='brentq'
         )
         assert root_finding_res.converged
@@ -1446,6 +1405,12 @@ def _(response_fun, root_scalar):
 @app.cell
 def _(find_distance_to_detector, opt_params):
     find_distance_to_detector(150.0, opt_params)
+    return
+
+
+@app.cell
+def _(find_distance_to_detector, opt_params):
+    find_distance_to_detector(17.0, opt_params)
     return
 
 
@@ -1507,15 +1472,23 @@ def _(
     sensor_to_loc,
     sensors,
 ):
-    def trad_localize(data, exp, sensors):
+    def trad_localize(data, exp, sensors, opt_params):
         # what sensors are in the game?
         game_sensors = select_responsive_sensors(data, exp, sensors)
 
         if len(game_sensors) == 0:
+            print(f"expt {exp} has no detectors with significant response.")
             return np.array([np.nan, np.nan])
 
+        # just select three highest
+        if len(game_sensors) < 3:
+            print(f"expt {exp} has only {len(game_sensors)} detectors with significant response.")
+            game_sensors = list(data.loc[exp, sensors].sort_values(ascending=False).index[0:3])
+    
         # predicted distance from these sensors
-        measured_distances = [find_distance_to_detector(data.loc[exp, sensor], opt_params) for sensor in game_sensors]
+        measured_distances = [
+            find_distance_to_detector(data.loc[exp, sensor], opt_params) for sensor in game_sensors
+        ]
 
         game_sensors_xy = [
             np.array(sensor_to_loc[sensor]) for sensor in game_sensors
@@ -1531,26 +1504,43 @@ def _(
                     for i in range(len(game_sensors))
             )
 
+        # initial guess using weighted centroid
+        # wts = data.loc[exp, game_sensors] / data.loc[exp, game_sensors].sum()
+        # initial_guess = np.sum(np.array(sensor_to_loc[sensor]) * wts[sensor] for sensor in game_sensors)
+    
+        # opt_res = minimize(
+        #     objective,
+        #     initial_guess,
+        #     method="L-BFGS-B",
+        #     bounds=[(0.0, box_dims[0]), (0.0, box_dims[1])]
+        # )
+
         opt_res = differential_evolution(
             objective,
             bounds=[(0.0, box_dims[0]), (0.0, box_dims[1])],
+            popsize=250
         )
 
         assert opt_res.success
 
         return opt_res.x
 
-    trad_localize(data, 3, sensors)
+    trad_localize(data, 3, sensors, opt_params)
     return (trad_localize,)
 
 
 @app.cell
-def _(data, sensors, trad_localize):
-    xy_trad_preds = [trad_localize(data, exp, sensors) for exp in range(data.shape[0])]
+def _(calculate_errors, data, opt_params, sensors, trad_localize):
+    # do traditional localization
+    xy_trad_preds = [trad_localize(data, exp, sensors, opt_params) for exp in range(data.shape[0])]
 
+    # put results into data frame
     data_trad = data.copy()
     data_trad["x_s_pred"] = [xy_trad_preds[exp][0] for exp in range(data.shape[0])]
     data_trad["y_s_pred"] = [xy_trad_preds[exp][1] for exp in range(data.shape[0])]
+
+    # calculate errors
+    calculate_errors(data_trad)
     data_trad
     return (data_trad,)
 
@@ -1570,19 +1560,24 @@ def _(data, data_trad, np, viz_source_locs):
     return
 
 
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""
-    Calculate Errors
-    """)
+@app.cell
+def _(data_loo, data_trad, plt, thing_to_color):
+    plt.figure()
+    plt.hist(data_loo["error"], alpha=0.5, label="ensemble of trees", color=thing_to_color["ML"])
+    plt.axvline(x=data_loo["error"].mean(), color=thing_to_color["ML"])
+    plt.hist(data_trad["error"], alpha=0.5, label="traditional localization", color=thing_to_color["trad"])
+    plt.axvline(x=data_trad["error"].mean(), color=thing_to_color["trad"])
+
+    plt.xlabel("error [in]")
+    plt.ylabel("# experiments")
+    plt.title("LOO-CV error")
+    plt.legend()
+    plt.show()
     return
 
 
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""
-    Visualize Error
-    """)
+@app.cell
+def _():
     return
 
 
