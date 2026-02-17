@@ -1389,18 +1389,13 @@ def _(mo):
 
 
 @app.cell
-def _():
-    return
-
-
-@app.cell
 def _(box_dims, np, response_fun, root_scalar):
     def find_distance_to_detector(detetector_output, opt_params):
         # max distance is corner to corner
         max_d = np.linalg.norm(box_dims)
         if response_fun(max_d, *opt_params) > detetector_output:
             return max_d    
-        
+
         root_finding_res = root_scalar(
             lambda d: response_fun(d, *opt_params) - detetector_output, 
             bracket=[0.1, max_d], 
@@ -1448,6 +1443,13 @@ def _(Nds):
 def _(data, select_responsive_sensors, sensors):
     select_responsive_sensors(data, 0, sensors)
     return
+
+
+@app.cell
+def _(data, select_responsive_sensors, sensors):
+    ids_no_signal = [exp for exp in range(data.shape[0]) if len(select_responsive_sensors(data, exp, sensors)) == 0]
+    ids_no_signal # exclude these for error analysis
+    return (ids_no_signal,)
 
 
 @app.cell
@@ -1505,7 +1507,7 @@ def _(
 
         if verbose:
             print("sensor data in the game:", data.loc[exp, game_sensors])
-    
+
         # predicted distance from these sensors
         measured_distances = [
             find_distance_to_detector(data.loc[exp, sensor], opt_params) for sensor in game_sensors
@@ -1528,7 +1530,7 @@ def _(
         # initial guess using weighted centroid
         # wts = data.loc[exp, game_sensors] / data.loc[exp, game_sensors].sum()
         # initial_guess = np.sum(np.array(sensor_to_loc[sensor]) * wts[sensor] for sensor in game_sensors)
-    
+
         # opt_res = minimize(
         #     objective,
         #     initial_guess,
@@ -1602,22 +1604,35 @@ def _(data, data_trad, viz_source_locs):
 
 
 @app.cell
-def _(data_loo, data_trad, np, plt, thing_to_color):
+def _(data, data_loo, data_trad, ids_no_signal, np, plt, thing_to_color):
+    expts_to_compare = [exp for exp in range(data.shape[0]) if not exp in ids_no_signal]
+
     _bins = np.linspace(0, max(data_loo["error"].max(), data_trad["error"].max()), 20)
 
     assert data_loo.shape[0] == data_trad.shape[0] # for comparison of errors
 
     plt.figure()
-    plt.hist(data_loo["error"], alpha=0.5, label="ensemble of trees", color=thing_to_color["ML"], bins=_bins)
-    plt.axvline(x=data_loo["error"].mean(), color=thing_to_color["ML"])
-    plt.hist(data_trad["error"], alpha=0.5, label="traditional localization", color=thing_to_color["trad"], bins=_bins)
-    plt.axvline(x=data_trad["error"].mean(), color=thing_to_color["trad"])
+    plt.hist(
+        data_loo.loc[expts_to_compare, "error"], 
+        alpha=0.5, label="ensemble of trees", color=thing_to_color["ML"], bins=_bins
+    )
+    plt.axvline(x=data_loo.loc[expts_to_compare, "error"].mean(), color=thing_to_color["ML"])
+    plt.hist(
+        data_trad.loc[expts_to_compare, "error"], 
+        alpha=0.5, label="traditional localization", color=thing_to_color["trad"], bins=_bins
+    )
+    plt.axvline(x=data_trad.loc[expts_to_compare, "error"].mean(), color=thing_to_color["trad"])
 
     plt.xlabel("error [in]")
     plt.ylabel("# experiments")
     plt.title("LOO-CV error")
     plt.legend()
     plt.show()
+    return
+
+
+@app.cell
+def _():
     return
 
 
