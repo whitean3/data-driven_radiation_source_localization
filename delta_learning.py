@@ -607,7 +607,7 @@ def _(data, np, plt, sns):
         plt.show()
 
     correlation_matrix(data.iloc[:,3::])
-    return (correlation_matrix,)
+    return
 
 
 @app.cell(hide_code=True)
@@ -1290,7 +1290,9 @@ def _(data_loo_c, disagreement_selector, viz_sensor_readout):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    # ☢️ triangulation
+    # ☢️ traditional least squares estimation of the source location
+
+    first, calibrate a curve that gives sensor response to the source as a function of distance from the source.
     """)
     return
 
@@ -1384,6 +1386,8 @@ def _(np, opt_params, output_distance_data, plt, response_fun):
 def _(mo):
     mo.md(r"""
     ### retreive distance from detector output
+
+    second, given a sensor's reading, predict the distance of the source from it. this puts a circle around the sensor.
     """)
     return
 
@@ -1418,7 +1422,7 @@ def _(mo):
     mo.md(r"""
     ## least squares estimator for location of source
 
-    first, select sensors that come into play.
+    third, given the response of the sensor network, select the subset of sensors that come into play with a detectable response.
     """)
     return
 
@@ -1445,10 +1449,26 @@ def _(data, select_responsive_sensors, sensors):
     return
 
 
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    some of the experiments led to no detectable response for ANY sensor. these are false negatives.
+    """)
+    return
+
+
 @app.cell
 def _(data, select_responsive_sensors, sensors):
-    ids_no_signal = [exp for exp in range(data.shape[0]) if len(select_responsive_sensors(data, exp, sensors)) == 0]
-    ids_no_signal # exclude these for error analysis
+    ids_false_neg_trad = [exp for exp in range(data.shape[0]) if len(select_responsive_sensors(data, exp, sensors)) == 0]
+    ids_false_neg_trad # exclude these for error analysis
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    when a SINGLE sensor in the network elicits a warning, we consider that a positive. but we need three for triangulation. so we select the top three sensors in terms of response from baseline.
+    """)
     return
 
 
@@ -1466,6 +1486,16 @@ def _(Nds):
 @app.cell
 def _(data, select_top_three_sensors, sensors):
     select_top_three_sensors(data, 20, sensors)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ## ☢️ a sub-baseline: simple triangulation
+
+    weighted average of significant sensor locations.
+    """)
     return
 
 
@@ -1488,7 +1518,7 @@ def _(data, opt_params, sensors, triangulation):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    traditional localization via finding source location most consistent with the recorded distance.
+    finally, the traditional localization method that finds source location most consistent with the "measured" distance. here measured means we look at the response and infer the distance from the calibration curve. now we search for source location that is most consistent with those distances we measure.
     """)
     return
 
@@ -1513,12 +1543,12 @@ def _(
         game_sensors = select_responsive_sensors(data, exp, sensors)
 
         if len(game_sensors) == 0:
-            print(f"expt {exp} has no detectors with significant response.")
+            print(f"FALSE NEGATIVE: expt {exp} has no detectors with significant response.")
             return np.array([np.nan, np.nan])
 
         # just select three highest above Nds
         if len(game_sensors) < 3:
-            print(f"expt {exp} has only {len(game_sensors)} detectors with significant response.")
+            print(f"WARNING: expt {exp} has only {len(game_sensors)} detectors with significant response. selecting top 3.")
             game_sensors = select_top_three_sensors(data, exp, sensors)
 
         if verbose:
@@ -1558,7 +1588,7 @@ def _(
             objective,
             bounds=[(0.0, box_dims[0]), (0.0, box_dims[1])],
             popsize=250
-        )
+        ) # better exploration to ensure we are not trapped in a local minimum
 
         assert opt_res.success
 
@@ -1571,6 +1601,14 @@ def _(
 
     trad_localize(data, 3, sensors, opt_params)
     return (trad_localize,)
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    🥞 let's do it!
+    """)
+    return
 
 
 @app.cell
@@ -1678,9 +1716,29 @@ def _(
     return
 
 
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    # 🥔 delta learning.
+    """)
+    return
+
+
 @app.cell
-def _(correlation_matrix):
-    correlation_matrix
+def _(data, data_trad, n_expts):
+    data_delta = data.copy()
+
+    # load with deltas
+    for exp in range(n_expts):
+        data_delta.loc[exp, "delta_x"] = data.loc[exp, "x_s"] - data_trad.loc[exp, "x_s_pred"]
+        data_delta.loc[exp, "delta_y"] = data.loc[exp, "y_s"] - data_trad.loc[exp, "y_s_pred"]
+    data_delta
+    return
+
+
+@app.cell
+def _(n_expts):
+    n_expts
     return
 
 
