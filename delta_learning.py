@@ -656,19 +656,35 @@ def _(np):
 
 
 @app.cell
-def _(ExtraTreesRegressor, LeaveOneOut, calculate_errors, np, sensors):
+def _(
+    ExtraTreesRegressor,
+    LeaveOneOut,
+    box_dims,
+    calculate_errors,
+    np,
+    sensors,
+):
     # a multi-output tree ensemble model. maps 8D vectors to 2D vectors.
     #  maps sensor network readout to source location
-    def do_loo_cv(data, n_estimators=100, verbose=True, very_verbose=False):
+    def do_loo_cv(
+        data, n_estimators=250, verbose=True, very_verbose=False, delta_modeling=False, uq=True
+    ):
+        target_prepend = "delta_" if delta_modeling else "" # handle delta modeling
+    
         data_loo = data.copy()
         # store predicted source locations in data frame.
         #  ok bc each data point is test point ONCE.
-        data_loo["x_s_pred"] = np.zeros((len(data)))
-        data_loo["y_s_pred"] = np.zeros((len(data)))
-        data_loo["ensemble pred source locs"] = [np.zeros(n_estimators) for _ in range(len(data_loo))]
+        data_loo[target_prepend + "x_s_pred"] = np.zeros((len(data)))
+        data_loo[target_prepend + "y_s_pred"] = np.zeros((len(data)))
+        if uq:
+            data_loo[target_prepend + "ensemble pred source locs"] = [np.zeros(n_estimators) for _ in range(len(data_loo))]
 
         loo = LeaveOneOut()
-        for i, (train_index, test_index) in enumerate(loo.split(data_loo)):
+        for i, (_train_index, _test_index) in enumerate(loo.split(data_loo)):
+            # account for non 0, ..., n_row indexing (NaN's dropped for delta learning)
+            train_index = data_loo.index[_train_index]
+            test_index  = data_loo.index[_test_index]
+        
             assert test_index.size == 1
             if verbose:
                 print("fold :", i, " / ", data.shape[0])
@@ -680,7 +696,7 @@ def _(ExtraTreesRegressor, LeaveOneOut, calculate_errors, np, sensors):
 
             # build X_train, y_train
             sensor_network_readout = data_loo.loc[train_index, sensors]
-            source_locs = data_loo.loc[train_index, ["x_s", "y_s"]]
+            source_locs = data_loo.loc[train_index, [target_prepend + "x_s", target_prepend + "y_s"]]
 
             # train tree ensemble on training data
             tree_ensemble = ExtraTreesRegressor(n_estimators=n_estimators)
@@ -694,25 +710,40 @@ def _(ExtraTreesRegressor, LeaveOneOut, calculate_errors, np, sensors):
             source_locs_test_pred = tree_ensemble.predict(sensor_network_readout_test)[0]
 
             # store prediction of source location on test network readout.
-            data_loo.loc[test_index, "x_s_pred"] = source_locs_test_pred[0]
-            data_loo.loc[test_index, "y_s_pred"] = source_locs_test_pred[1]
+            data_loo.loc[test_index, target_prepend + "x_s_pred"] = source_locs_test_pred[0]
+            data_loo.loc[test_index, target_prepend + "y_s_pred"] = source_locs_test_pred[1]
 
             # also store predictions by each tree for UQ
             for tree in tree_ensemble.estimators_: # back to suppress warning
                 tree.feature_names_in_ = tree_ensemble.feature_names_in_
 
-            data_loo.loc[test_index, "ensemble pred source locs"] = [
-                np.array(
-                    [tree.predict(sensor_network_readout_test)[0] for tree in tree_ensemble.estimators_]
-                )
-            ]
-
+            if uq:
+                data_loo.loc[test_index, target_prepend + "ensemble pred source locs"] = [
+                    np.array(
+                        [tree.predict(sensor_network_readout_test)[0] for tree in tree_ensemble.estimators_]
+                    )
+                ]
+        
+        if delta_modeling:
+            for ii, coord in enumerate(["x", "y"]):
+                # the prediction is really LS pred plus the delta
+                data_loo[coord + "_s_pred"] = data_loo[f"{coord}_s_LS_pred"] + data_loo[f"delta_{coord}_s_pred"]
+                # avoid going outside the box
+                data_loo[coord + "_s_pred"] = data_loo[coord + "_s_pred"].apply(lambda x: max(0, x))
+                data_loo[coord + "_s_pred"] = data_loo[coord + "_s_pred"].apply(lambda x: min(box_dims[ii], x))
+            
         # DONE! compute and store error = distance from true to predicted source
         calculate_errors(data_loo)
 
         return data_loo
 
     return (do_loo_cv,)
+
+
+@app.cell
+def _(data_delta):
+    data_delta
+    return
 
 
 @app.cell
@@ -803,7 +834,7 @@ def _(box_dims, data_loo, plt):
         plt.show()
 
     xy_parity_plot(data_loo)
-    return
+    return (xy_parity_plot,)
 
 
 @app.cell
@@ -1182,7 +1213,7 @@ def _(data, data_bkg, np, pd):
 
 
 @app.cell
-def _(ExtraTreesClassifier, LeaveOneOut, data, np, sensors):
+def _(ExtraTreesClassifier, LeaveOneOut, np, sensors):
     # a multi-output tree ensemble model. maps 8D vectors to 2D vectors.
     #  maps sensor network readout to source location
     def do_loo_cv_classification(data_c, n_estimators=100, verbose=True, very_verbose=False):
@@ -1192,10 +1223,14 @@ def _(ExtraTreesClassifier, LeaveOneOut, data, np, sensors):
         data_loo["pred_safe"] = np.zeros((len(data_c)))
 
         loo = LeaveOneOut()
-        for i, (train_index, test_index) in enumerate(loo.split(data_loo)):
+        for i, (_train_index, _test_index) in enumerate(loo.split(data_loo)):
+            # account for index missing after remove NaN
+            train_index = data_loo.index[_train_index]
+            test_index  = data_loo.index[_test_index]
+        
             assert test_index.size == 1
             if verbose:
-                print("fold :", i, " / ", data.shape[0])
+                print("fold :", i, " / ", data_loo.shape[0])
 
                 if very_verbose:
                     print("\ttest expt: ", test_index)
@@ -1713,7 +1748,7 @@ def _(
     plt.title("LOO-CV error")
     plt.legend()
     plt.show()
-    return
+    return (expts_to_compare,)
 
 
 @app.cell(hide_code=True)
@@ -1730,20 +1765,122 @@ def _(data, data_trad, n_expts):
 
     # load with deltas
     for exp in range(n_expts):
-        data_delta.loc[exp, "delta_x"] = data.loc[exp, "x_s"] - data_trad.loc[exp, "x_s_pred"]
-        data_delta.loc[exp, "delta_y"] = data.loc[exp, "y_s"] - data_trad.loc[exp, "y_s_pred"]
+        for coord in ["x", "y"]:
+            # x_{pred, ML} = x_{pred, LS} + delta.
+            #   hope: x_{pred, ML} = x_true. so delta := x_true - x_{pred, LS}
+            data_delta.loc[exp, "delta_" + coord + "_s"] = data.loc[exp,  coord + "_s"] - data_trad.loc[exp, coord + "_s_pred"]
+
+            # store trad pred too
+            data_delta.loc[exp, f"{coord}_s_LS_pred"] = data_trad.loc[exp, coord + "_s_pred"]
+        
+    # remove the NaNs which are false negatives
+    print(f"dropping {data_delta.isna().any(axis=1).sum()} rows with NaN corresponding with false negatives.")
+    data_delta = data_delta.dropna()
+
     data_delta
+    return (data_delta,)
+
+
+@app.cell
+def _(data_delta, do_loo_cv, don_run_loo_cv):
+    if not don_run_loo_cv.value:
+        data_delta_loo = do_loo_cv(data_delta, delta_modeling=True, very_verbose=False, uq=False)
+    data_delta_loo
+    return (data_delta_loo,)
+
+
+@app.cell
+def _(data_delta_loo, xy_parity_plot):
+    xy_parity_plot(data_delta_loo)
     return
 
 
 @app.cell
-def _(n_expts):
-    n_expts
+def _(data_delta_loo, np, plt):
+    def deltas_parity_plot(data, scale=None):
+        if not scale:
+            scale = np.max(
+                [
+                    data["delta_x_s_pred"].abs().max(), data["delta_y_s_pred"].abs().max(),
+                    data["delta_x_s"].abs().max(), data["delta_y_s"].abs().max()
+                ]
+            )
+    
+        f, (ax1, ax2) = plt.subplots(1, 2)
+        plt.subplots_adjust(wspace=0.3)
+        for ax in [ax1, ax2]:
+            ax.set_aspect('equal', 'box')
+
+        ax1.set_xlim(-scale, scale)
+        ax1.set_ylim(-scale, scale)
+        ax2.set_xlim(-scale, scale)
+        ax2.set_ylim(-scale, scale)
+    
+        ax1.plot([-scale, scale], [-scale, scale], color="black", linestyle="--")
+        ax2.plot([-scale, scale], [-scale, scale], color="black", linestyle="--")
+
+        ax1.set_xlabel("$\delta x_s$ [in]")
+        ax2.set_xlabel("$\delta y_s$ [in]")
+        ax1.set_ylabel("predicted $\delta x_s$ [in]")
+        ax2.set_ylabel("predicted $\delta y_s$ [in]")
+
+        ax1.scatter(data["delta_x_s"], data["delta_x_s_pred"], clip_on=False, s=5)
+        ax2.scatter(data["delta_y_s"], data["delta_y_s_pred"], clip_on=False, s=5)
+
+        plt.show()
+
+    deltas_parity_plot(data_delta_loo, scale=20)
     return
 
 
 @app.cell
-def _():
+def _(
+    data_delta_loo,
+    data_loo,
+    data_trad,
+    data_triangulation,
+    expts_to_compare,
+    np,
+    plt,
+    theme_colors,
+    thing_to_color,
+):
+    _expts_to_compare = data_delta_loo.index
+
+    _bins = np.linspace(0, max(data_loo["error"].max(), data_trad["error"].max()), 20)
+
+    assert data_loo.shape[0] == data_trad.shape[0] # for comparison of errors
+
+    plt.figure()
+    plt.hist(
+        data_loo.loc[expts_to_compare, "error"], 
+        alpha=0.5, label="ensemble of trees", color=thing_to_color["ML"], bins=_bins
+    )
+    plt.axvline(x=data_loo.loc[expts_to_compare, "error"].mean(), color=thing_to_color["ML"])
+
+    plt.hist(
+        data_trad.loc[expts_to_compare, "error"], 
+        alpha=0.5, label="traditional localization", color=thing_to_color["trad"], bins=_bins
+    )
+    plt.axvline(x=data_trad.loc[expts_to_compare, "error"].mean(), color=thing_to_color["trad"])
+
+    plt.hist(
+        data_triangulation.loc[expts_to_compare, "error"], 
+        alpha=0.5, label="triangulation", color=theme_colors[3], bins=_bins
+    )
+    plt.axvline(x=data_triangulation.loc[expts_to_compare, "error"].mean(), color=theme_colors[3])
+
+    plt.hist(
+        data_delta_loo.loc[expts_to_compare, "error"], 
+        alpha=0.5, label="delta ML", color=theme_colors[4], bins=_bins
+    )
+    plt.axvline(x=data_delta_loo.loc[expts_to_compare, "error"].mean(), color=theme_colors[4])
+
+    plt.xlabel("error [in]")
+    plt.ylabel("# experiments")
+    plt.title("LOO-CV error")
+    plt.legend()
+    plt.show()
     return
 
 
