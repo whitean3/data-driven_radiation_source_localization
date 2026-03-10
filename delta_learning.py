@@ -207,11 +207,11 @@ def _():
 
 @app.cell
 def _(folder_path, n_expts, n_sensors, os, read_detector_outputs):
-    def read_all_data(n_expts):
+    def read_all_data(n_expts, exp_to_filename):
         dataframes = {}
 
         for exp in range(n_expts):
-            filename = f"pos_{exp}.csv"
+            filename = exp_to_filename(exp)
             file_path = os.path.join(folder_path, filename)
             print(f"\nReading {filename}...")
             # Use the filename (or file_path) as the key
@@ -221,8 +221,8 @@ def _(folder_path, n_expts, n_sensors, os, read_detector_outputs):
             assert dataframes[exp]["SN"].nunique() == n_sensors
         return dataframes
 
-    detector_outputs = read_all_data(n_expts)
-    return (detector_outputs,)
+    detector_outputs = read_all_data(n_expts, lambda exp: f"pos_{exp}.csv")
+    return detector_outputs, read_all_data
 
 
 @app.cell
@@ -299,7 +299,7 @@ def _(detector_outputs, df_source_locs, pd, sensors):
 
     data = make_data_nice(detector_outputs, df_source_locs)
     data
-    return (data,)
+    return data, make_data_nice
 
 
 @app.cell
@@ -745,7 +745,7 @@ def _(
 
 @app.cell
 def _(mo):
-    don_run_loo_cv = mo.ui.checkbox(label="don't run LOO CV?", value=True)
+    don_run_loo_cv = mo.ui.checkbox(label="don't run LOO CV?", value=False)
     don_run_loo_cv
     return (don_run_loo_cv,)
 
@@ -1013,6 +1013,7 @@ def _(ExtraTreesRegressor, sensors):
 
 @app.cell
 def _(data, n_sensors, np, plt, train_tree_ensemble):
+    # train on ALL data
     tree_ensemble = train_tree_ensemble(data)
 
     plt.figure()
@@ -1508,33 +1509,6 @@ def _(data, select_top_three_sensors, sensors):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(
-        r"""
-    ## ☢️ a sub-baseline: simple triangulation
-
-    weighted average of significant sensor locations.
-    """
-    )
-    return
-
-
-@app.cell
-def _(np, select_top_three_sensors, sensor_to_loc):
-    def dumb_triangulation(data, exp, sensors, opt_params):
-        game_sensors = select_top_three_sensors(data, exp, sensors)
-        wts = data.loc[exp, game_sensors] / data.loc[exp, game_sensors].sum()
-        return np.sum([np.array(sensor_to_loc[sensor]) * wts[sensor] for sensor in game_sensors], axis=0)
-    return (dumb_triangulation,)
-
-
-@app.cell
-def _(data, dumb_triangulation, opt_params, sensors):
-    dumb_triangulation(data, 0, sensors, opt_params)
-    return
-
-
-@app.cell(hide_code=True)
-def _(mo):
     mo.md(r"""finally, the traditional localization method that finds source location most consistent with the "measured" distance. here measured means we look at the response and infer the distance from the calibration curve. now we search for source location that is most consistent with those distances we measure.""")
     return
 
@@ -1555,7 +1529,7 @@ def _(
     def trad_localize(data, exp, sensors, opt_params, verbose=False):
         if verbose:
             print(f"expt {exp}")
-        
+
         # what sensors are in the game?
         game_sensors = select_responsive_sensors(data, exp, sensors)
 
@@ -1630,6 +1604,33 @@ def _(calculate_errors, data, opt_params, sensors, trad_localize):
     return (data_trad,)
 
 
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(
+        r"""
+    ## ☢️ a sub-baseline: simple triangulation
+
+    weighted average of significant sensor locations.
+    """
+    )
+    return
+
+
+@app.cell
+def _(np, select_top_three_sensors, sensor_to_loc):
+    def dumb_triangulation(data, exp, sensors, opt_params):
+        game_sensors = select_top_three_sensors(data, exp, sensors)
+        wts = data.loc[exp, game_sensors] / data.loc[exp, game_sensors].sum()
+        return np.sum([np.array(sensor_to_loc[sensor]) * wts[sensor] for sensor in game_sensors], axis=0)
+    return (dumb_triangulation,)
+
+
+@app.cell
+def _(data, dumb_triangulation, opt_params, sensors):
+    dumb_triangulation(data, 0, sensors, opt_params)
+    return
+
+
 @app.cell
 def _(calculate_errors, data, dumb_triangulation, opt_params, sensors):
     xy_triangulation_preds = [dumb_triangulation(data, exp, sensors, opt_params) for exp in range(data.shape[0])]
@@ -1670,26 +1671,20 @@ def _(data, data_trad, viz_source_locs):
     return
 
 
-@app.cell
-def _(data_loo):
-    data_loo["error"]
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""## compare errors among methods""")
     return
 
 
 @app.cell
-def _(data_trad):
-    data_trad["error"]
-    return
+def _(data, ids_wrong):
+    expts_to_compare = [exp for exp in range(data.shape[0]) if not exp in ids_wrong]
+    return (expts_to_compare,)
 
 
 @app.cell
-def _(data_loo):
-    data_loo["error"].rename({"error": "tree ensemble"})
-    return
-
-
-@app.cell
-def _(data_loo, data_trad, data_triangulation, pd):
+def _(data_loo, data_trad, data_triangulation, expts_to_compare, pd):
     all_errors = pd.merge(
         pd.merge(
             data_loo["error"].rename("tree\nensemble"), 
@@ -1699,6 +1694,7 @@ def _(data_loo, data_trad, data_triangulation, pd):
         data_triangulation["error"].rename("naive\ntriangulation"),
         left_index=True, right_index=True
     )
+    all_errors = all_errors.loc[expts_to_compare, :]
     all_errors = all_errors.melt(var_name='method', value_name='error')
     all_errors
     return (all_errors,)
@@ -1709,72 +1705,22 @@ def _(all_errors, plt, pt, sns):
     # see https://github.com/pog87/PtitPrince/blob/master/tutorial_python/raincloud_tutorial_python.ipynb
     _f, _ax = plt.subplots(figsize=(7, 5))
     pt.RainCloud(
-        x="method", data=all_errors, y="error", hue="method", bw=0.25, ax=_ax, orient="h", palette=sns.color_palette("Set2")[:3]
+        x="method", data=all_errors.rename(columns={"error": "absolute error [in]"}), 
+        y="absolute error [in]", hue="method", bw=0.25, ax=_ax, orient="h", palette=sns.color_palette("Set2")[:3]#, cut=2
     )
     _ax.set_xlim(xmin=0.0)
+    for i, method in enumerate(all_errors["method"].unique()):
+        mean_err = all_errors[all_errors["method"] == method]["error"].mean()
+        _ax.text(
+            x=_ax.get_xlim()[1],  # right edge
+            y=i-0.4,           # slightly above each cloud
+            s=f"mean: {mean_err:.3f} in",
+            ha="right", va="bottom",
+            fontsize=9, color="black"
+        )
     plt.savefig("error_rainclouds.pdf", format="pdf")
     plt.show()
-    return
-
-
-@app.cell
-def _(
-    data,
-    data_delta_loo,
-    data_loo,
-    data_trad,
-    data_triangulation,
-    ids_wrong,
-    np,
-    plt,
-    theme_colors,
-    thing_to_color,
-):
-    expts_to_compare = [exp for exp in range(data.shape[0]) if not exp in ids_wrong]
-
-    #_bins = np.linspace(0, max(data_loo["error"].max(), data_trad["error"].max()), 20)
-    _bins = np.linspace(0, 37, 41)
-    assert data_loo.shape[0] == data_trad.shape[0] # for comparison of errors
-
-    plt.figure()
-    plt.hist(
-        data_loo.loc[expts_to_compare, "error"], 
-        alpha=0.5, label="ensemble of trees", color=thing_to_color["ML"], bins=_bins
-    )
-    plt.axvline(x=data_loo.loc[expts_to_compare, "error"].mean(), color=thing_to_color["ML"])
-
-    plt.hist(
-        data_trad.loc[expts_to_compare, "error"], 
-        alpha=0.5, label="traditional localization", color=thing_to_color["trad"], bins=_bins
-    )
-    plt.axvline(x=data_trad.loc[expts_to_compare, "error"].mean(), color=thing_to_color["trad"])
-
-    plt.hist(
-        data_triangulation.loc[expts_to_compare, "error"], 
-        alpha=0.5, label="naive triangulation", color=theme_colors[3], bins=_bins
-    )
-    plt.axvline(x=data_triangulation.loc[expts_to_compare, "error"].mean(), color=theme_colors[3])
-
-    # optional: delta learning
-    if False:
-        plt.hist(
-            data_delta_loo.loc[expts_to_compare, "error"], 
-            alpha=0.5, label="delta ML", color=theme_colors[4], bins=_bins
-        )
-        plt.axvline(x=data_delta_loo.loc[expts_to_compare, "error"].mean(), color=theme_colors[4])
-
-    plt.xlabel("error [in]")
-    plt.xlim(xmin=0.0)
-    plt.ylabel("# experiments")
-    plt.title("LOO-CV error")
-    plt.legend()
-    plt.show()
-    return
-
-
-@app.cell
-def _():
-    return
+    return (i,)
 
 
 @app.cell(hide_code=True)
@@ -1859,7 +1805,7 @@ def _(data_delta_loo, np, plt):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""# Tracking""")
+    mo.md(r"""# 🚓 tracking""")
     return
 
 
@@ -1870,22 +1816,8 @@ def _():
 
 
 @app.cell
-def _(folder_path, n_sensors, n_tracks, os, read_detector_outputs):
-    def read_tracking_data(n_expts):
-        dataframes = {}
-
-        for exp in range(1,n_expts+1):
-            filename = f"tracking/20260303_track_{exp}.csv"
-            file_path = os.path.join(folder_path, filename)
-            print(f"\nReading {filename}...")
-            # Use the filename (or file_path) as the key
-            dataframes[exp] = read_detector_outputs(file_path)
-
-            # unique sensors
-            assert dataframes[exp]["SN"].nunique() == n_sensors
-        return dataframes
-
-    tracking_outputs = read_tracking_data(n_tracks)
+def _(n_tracks, read_all_data):
+    tracking_outputs = read_all_data(n_tracks, lambda exp: f"tracking/20260303_track_{exp+1}.csv")
     return (tracking_outputs,)
 
 
@@ -1903,22 +1835,8 @@ def _(box_dims, pd):
 
 
 @app.cell
-def _(pd, sensors):
-    def make_track_data_nice(detector_outputs, df_source_locs):
-        data = pd.DataFrame(columns=sensors) # nice data for ML
-        # sensor network data
-        for exp in range(1,len(detector_outputs)+1):
-            new_row = {sensor : grab_sensor_response(detector_outputs[exp], sensor) for sensor in sensors}
-            data.loc[len(data)] = new_row
-        # join source locs
-        data = pd.concat([df_source_locs, data], axis=1)
-        return data
-    return (make_track_data_nice,)
-
-
-@app.cell
-def _(make_track_data_nice, tracking_locs, tracking_outputs):
-    tracking_data = make_track_data_nice(tracking_outputs, tracking_locs)
+def _(make_data_nice, tracking_locs, tracking_outputs):
+    tracking_data = make_data_nice(tracking_outputs, tracking_locs)
     tracking_data
     return (tracking_data,)
 
@@ -1930,14 +1848,27 @@ def _(tracking_data, viz_source_locs):
 
 
 @app.cell
+def _(i, sensors, tracking_data):
+    tracking_data.loc[i, sensors]
+    return
+
+
+@app.cell
+def _(tracking_data):
+    tracking_data
+    return
+
+
+@app.cell
 def _(sensors, tracking_data, tree_ensemble):
-    def predict_track(tracking_data):
+    def predict_track(tracking_data, tree_ensemble):
+        pred_source_locs = tree_ensemble.predict(tracking_data.loc[:, sensors])
         for i in range(len(tracking_data)):
-            pred_loc = tree_ensemble.predict([tracking_data.loc[i, sensors]])[0]
-            tracking_data.loc[i, "x_s_pred"] = pred_loc[0]
-            tracking_data.loc[i, "y_s_pred"] = pred_loc[1]
+            tracking_data.loc[i, "x_s_pred"] = pred_source_locs[i][0]
+            tracking_data.loc[i, "y_s_pred"] = pred_source_locs[i][1]
         return tracking_data
-    tracking_data_loo = predict_track(tracking_data)
+    
+    tracking_data_loo = predict_track(tracking_data, tree_ensemble)
     return
 
 
