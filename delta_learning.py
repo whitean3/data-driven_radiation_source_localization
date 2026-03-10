@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.17.7"
+__generated_with = "0.14.17"
 app = marimo.App(width="medium")
 
 
@@ -22,6 +22,7 @@ def _():
     import scipy.optimize as optimize
     import matplotlib as mpl
     import seaborn as sns
+    import ptitprince as pt # for raincloud
     plt.style.use('rose-pine-dawn.mplstyle') # https://github.com/h4pZ/rose-pine-matplotlib/tree/main/themes
     fm.fontManager.addfont("SourceCodePro-Regular.ttf") # https://fonts.google.com/specimen/Source+Code+Pro
     plt.rcParams["font.family"] = "Source Code Pro"
@@ -43,6 +44,7 @@ def _():
         patches,
         pd,
         plt,
+        pt,
         root_scalar,
         sns,
         transforms,
@@ -74,7 +76,8 @@ def _(sns):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
+    mo.md(
+        r"""
     # ::icon-park:data:: read in sensor network response data
 
     * each data set is the sensor network response to a source in a particular location.
@@ -83,7 +86,8 @@ def _(mo):
     * the list of source locations are below.
 
     ## locations of detectors in the environment
-    """)
+    """
+    )
     return
 
 
@@ -104,14 +108,14 @@ def _(box_dims, n_sensors, np):
     # maps sensor ID to coordinates i.e. (x, y) positions. 
     #   the origin is the top left (we rectify below.)
     sensor_to_loc = {
-        		"16518": [2, 3],
-    			"16520": [2, 18],
-    			"16519": [2, 27], 
-    			"16513": [14, 10],
-    			"16516": [21, 25],
-    			"16521": [26, 1],
-    			"16517": [38, 8],
-    			"16512": [40, 24]
+        "16518": [2, 3],
+        "16520": [2, 18],
+        "16519": [2, 27], 
+        "16513": [14, 10],
+        "16516": [21, 25],
+        "16521": [26, 1],
+        "16517": [38, 8],
+        "16512": [40, 24]
     }
     assert len(sensor_to_loc) == n_sensors
 
@@ -126,7 +130,8 @@ def _(box_dims, n_sensors, np):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
+    mo.md(
+        r"""
     ## locations of the radioactive source placed in the environment
 
     the first 25 rows come from Latin Hypercube sampling.
@@ -134,7 +139,8 @@ def _(mo):
     the next 25 rows are manually-selected on the corners/boundary.
 
     the remaining 25 are from another round of Latin Hypercube sampling.
-    """)
+    """
+    )
     return
 
 
@@ -153,9 +159,7 @@ def _(box_dims, pd):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
-    ## read in sensor responses
-    """)
+    mo.md(r"""## read in sensor responses""")
     return
 
 
@@ -229,29 +233,30 @@ def _(detector_outputs):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
+    mo.md(
+        r"""
     ## re-work data into an ML-friendly format
 
     ::lucide:lightbulb:: source locations paired with sensor network response vectors
 
     first, get list of sensors in the network.
-    """)
+    """
+    )
     return
 
 
 @app.cell
 def _(detector_outputs, n_sensors):
     sensors = detector_outputs[0]["SN"].unique()
+    sensor_to_nice_int = dict(zip(sensors, range(len(sensors))))
     assert len(sensors) == n_sensors
     sensors
-    return (sensors,)
+    return sensor_to_nice_int, sensors
 
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
-    next, from a sensor network response data frame, extract the count rate of a particular sensor.
-    """)
+    mo.md(r"""next, from a sensor network response data frame, extract the count rate of a particular sensor.""")
     return
 
 
@@ -269,12 +274,14 @@ def _(detector_outputs, np, sensors):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
+    mo.md(
+        r"""
     🎯 goal:
 
     * each row is an experiment where we place the source at a location and observe the sensor network response
     * the row lists the source location paired with the sensor response vector.
-    """)
+    """
+    )
     return
 
 
@@ -284,7 +291,7 @@ def _(detector_outputs, df_source_locs, pd, sensors):
         data = pd.DataFrame(columns=sensors) # nice data for ML
         # sensor network data
         for exp in range(len(detector_outputs)):
-            new_row = {sensor : grab_sensor_response(detector_outputs[exp], sensor) for sensor in sensors}
+            new_row = {sensor: grab_sensor_response(detector_outputs[exp], sensor) for sensor in sensors}
             data.loc[len(data)] = new_row
         # join source locs
         data = pd.concat([df_source_locs, data], axis=1)
@@ -303,11 +310,13 @@ def _(data, np, sensors):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
+    mo.md(
+        r"""
     ## ::lucide:sailboat:: visually explore the data
 
     first, where are the source locations over all experiments?
-    """)
+    """
+    )
     return
 
 
@@ -317,11 +326,12 @@ def _(
     data,
     plt,
     sensor_to_loc,
+    sensor_to_nice_int,
     sensors,
     setup_environment,
     thing_to_color,
 ):
-    def viz_source_locs(data, ids=None, title="source locations"):
+    def viz_source_locs(data, ids=None, title=""):
         if ids is None:
             ids = range(data.shape[0])
 
@@ -343,7 +353,7 @@ def _(
         # sensor names
         for sensor in sensors:
             plt.annotate(
-                f"{sensor}",
+                f"{sensor_to_nice_int[sensor]}",
                 (sensor_to_loc[sensor][0], sensor_to_loc[sensor][1]),
                 xytext=(5, 5),
                 textcoords="offset points", 
@@ -355,7 +365,7 @@ def _(
         plt.scatter(
             data.loc[ids, "x_s"], data.loc[ids, "y_s"], 
             clip_on=False, color=thing_to_color["true source loc"], s=65, marker="o", 
-            label="radiation source"
+            label="radiation\nsource"
         )
 
         plt.title(title)
@@ -363,7 +373,7 @@ def _(
         # legend w unique entries
         handles, labels = plt.gca().get_legend_handles_labels()
         by_label = dict(zip(labels, handles))
-        plt.legend(by_label.values(), by_label.keys(), bbox_to_anchor=(1.3, 0.5), loc='upper left', borderaxespad=0)
+        plt.legend(by_label.values(), by_label.keys(), bbox_to_anchor=(1.05, 0.8), loc='upper left', borderaxespad=0)
 
         plt.show()
 
@@ -373,9 +383,7 @@ def _(
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
-    second, visualize the sensor readout and source location for a single experiment.
-    """)
+    mo.md(r"""second, visualize the sensor readout and source location for a single experiment.""")
     return
 
 
@@ -482,6 +490,7 @@ def _(
     plt,
     sensor_colormap,
     sensor_to_loc,
+    sensor_to_nice_int,
     sensors,
     setup_environment,
     thing_to_color,
@@ -508,7 +517,7 @@ def _(
         if label_sensors:
             for sensor in sensors:
                 plt.annotate(
-                    f"{sensor}",
+                    f"{sensor_to_nice_int[sensor]}",
                     (sensor_to_loc[sensor][0], sensor_to_loc[sensor][1]),
                     xytext=(5, 5),
                     textcoords="offset points", 
@@ -521,7 +530,7 @@ def _(
         # plot source location
         plt.scatter(
             data.loc[exp, "x_s"], data.loc[exp, "y_s"], marker="o", 
-            s=65, color=thing_to_color["true source loc"], label="source location", clip_on=False
+            s=65, color=thing_to_color["true source loc"], label="source\nlocation", clip_on=False
         )
 
         plt.title(f"experiment {exp}")
@@ -529,7 +538,7 @@ def _(
         # legend w unique entries
         handles, labels = plt.gca().get_legend_handles_labels()
         by_label = dict(zip(labels, handles))
-        plt.legend(by_label.values(), by_label.keys(), bbox_to_anchor=(1.3, 0.5), loc='upper left', borderaxespad=0)
+        plt.legend(by_label.values(), by_label.keys(), bbox_to_anchor=(1.25, 0.8), loc='upper left', borderaxespad=0)
 
         plt.show()
 
@@ -551,15 +560,13 @@ def _(data, viz_source_locs):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
-    the distribution of the detector responses over all experiments and correlations between them. use a log scale.
-    """)
+    mo.md(r"""the distribution of the detector responses over all experiments and correlations between them. use a log scale.""")
     return
 
 
 @app.cell
-def _(data, plt, sensors, sns, theme_colors):
-    sns.swarmplot(data[sensors], size=2, color=theme_colors[3])
+def _(data, plt, sensor_to_nice_int, sensors, sns, theme_colors):
+    sns.swarmplot(data[sensors].rename(columns=sensor_to_nice_int), size=2, color=theme_colors[3])
     plt.axhline(13.2, linestyle="--", color="gray", zorder=0) # background
     plt.yscale("log")
     plt.xlabel("sensor")
@@ -569,9 +576,9 @@ def _(data, plt, sensors, sns, theme_colors):
 
 
 @app.cell
-def _(data, np, plt, sensors, sns):
+def _(data, np, plt, sensor_to_nice_int, sensors, sns):
     _bins = np.geomspace(data[sensors].min().min(), data[sensors].max().max(), 30)
-    _g = sns.pairplot(data[sensors], corner=True, diag_kws={'bins': _bins})
+    _g = sns.pairplot(data[sensors].rename(columns=sensor_to_nice_int), corner=True, diag_kws={'bins': _bins})
     for _ax in _g.axes.flat:
         if not _ax == None:
             _ax.set_xscale('log')
@@ -581,7 +588,7 @@ def _(data, np, plt, sensors, sns):
 
 
 @app.cell
-def _(data, np, plt, sns):
+def _(data, np, plt, sensor_to_nice_int, sensors, sns):
     def correlation_matrix(data):
         # Compute the correlation matrix
         corr = data.corr()
@@ -602,13 +609,14 @@ def _(data, np, plt, sns):
         plt.title("Detector Correlation Matrix")
         plt.show()
 
-    correlation_matrix(data.iloc[:,3::])
+    correlation_matrix(data[sensors].rename(columns=sensor_to_nice_int))
     return
 
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
+    mo.md(
+        r"""
     # ☢️ source location predictor
 
     ML task: predict source location from sensor network response
@@ -619,7 +627,8 @@ def _(mo):
     **output**: 2D source location
 
     ## leave-one-out cross validation
-    """)
+    """
+    )
     return
 
 
@@ -720,12 +729,12 @@ def _(
                 ]
 
         if delta_modeling:
-            for ii, coord in enumerate(["x", "y"]):
+            for ii, xy in enumerate(["x", "y"]):
                 # the prediction is really LS pred plus the delta
-                data_loo[coord + "_s_pred"] = data_loo[f"{coord}_s_LS_pred"] + data_loo[f"delta_{coord}_s_pred"]
+                data_loo[xy + "_s_pred"] = data_loo[f"{xy}_s_LS_pred"] + data_loo[f"delta_{xy}_s_pred"]
                 # avoid going outside the box
-                data_loo[coord + "_s_pred"] = data_loo[coord + "_s_pred"].apply(lambda x: max(0, x))
-                data_loo[coord + "_s_pred"] = data_loo[coord + "_s_pred"].apply(lambda x: min(box_dims[ii], x))
+                data_loo[xy + "_s_pred"] = data_loo[xy + "_s_pred"].apply(lambda x: max(0, x))
+                data_loo[xy + "_s_pred"] = data_loo[xy + "_s_pred"].apply(lambda x: min(box_dims[ii], x))
 
         # DONE! compute and store error = distance from true to predicted source
         calculate_errors(data_loo)
@@ -735,14 +744,8 @@ def _(
 
 
 @app.cell
-def _(data_delta):
-    data_delta
-    return
-
-
-@app.cell
 def _(mo):
-    don_run_loo_cv = mo.ui.checkbox(label="don't run LOO CV?")
+    don_run_loo_cv = mo.ui.checkbox(label="don't run LOO CV?", value=True)
     don_run_loo_cv
     return (don_run_loo_cv,)
 
@@ -757,9 +760,7 @@ def _(data, do_loo_cv, don_run_loo_cv):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
-    analyze error := norm of true source location vector minus predicted source location vector.
-    """)
+    mo.md(r"""analyze error := norm of true source location vector minus predicted source location vector.""")
     return
 
 
@@ -784,9 +785,7 @@ def _(data_loo, plt):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
-    parity plot over cross-validation procedure.
-    """)
+    mo.md(r"""parity plot over cross-validation procedure.""")
     return
 
 
@@ -990,16 +989,14 @@ def _(
 
         plt.show()
 
-    _exp = 7
-    viz_prediction(data_loo, _exp, n_samples=10)
+    _exp = 12
+    viz_prediction(data_loo, _exp, n_samples=25)
     return
 
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
-    ### sensor importance
-    """)
+    mo.md(r"""### sensor importance""")
     return
 
 
@@ -1015,13 +1012,13 @@ def _(ExtraTreesRegressor, sensors):
 
 
 @app.cell
-def _(data, n_sensors, np, plt, sensors, train_tree_ensemble):
+def _(data, n_sensors, np, plt, train_tree_ensemble):
     tree_ensemble = train_tree_ensemble(data)
 
     plt.figure()
     plt.xlabel("sensor")
     plt.ylabel("feature importance")
-    plt.xticks(np.arange(n_sensors), sensors)
+    plt.xticks(np.arange(n_sensors))
     plt.bar(np.arange(n_sensors), tree_ensemble.feature_importances_)
     return (tree_ensemble,)
 
@@ -1031,14 +1028,14 @@ def _(
     box_dims,
     data,
     draw_obstacles,
+    n_sensors,
     plt,
-    sensor_colormap,
     sensor_to_loc,
     sensors,
     setup_environment,
     tree_ensemble,
 ):
-    def viz_importance(data):
+    def viz_sensor_importance(data, tree_ensemble):
         fig, ax = setup_environment(box_dims)
         draw_obstacles(ax)
 
@@ -1048,27 +1045,25 @@ def _(
             [sensor_to_loc[sensor][1] for sensor in sensors],
             s=50, edgecolor="black", marker="s",
             clip_on=False,
-            c=[tree_ensemble.feature_importances_[sensor] for sensor in range(0,len(sensors))],
+            c=[tree_ensemble.feature_importances_[sensor] for sensor in range(n_sensors)],
             vmin=0,
-            vmax=0.24,
+            vmax=tree_ensemble.feature_importances_.max(),
             label="sensor",
-            cmap=sensor_colormap
+            cmap="plasma"
         )
 
-        plt.colorbar(label="Importance", extend="max")
+        plt.colorbar(label="sensor importance")
 
-        plt.title("Sensor Impotance")
+        # plt.title("sensor importance")
         plt.show()
 
-    viz_importance(data)
+    viz_sensor_importance(data, tree_ensemble)
     return
 
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
-    ## learning curve
-    """)
+    mo.md(r"""## learning curve""")
     return
 
 
@@ -1123,13 +1118,15 @@ def _(learning_curve, plt, run_learning_curve):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
+    mo.md(
+        r"""
     # ☢️ source presence classifier
 
     distinguish source presence from background.
 
     ##  background data
-    """)
+    """
+    )
     return
 
 
@@ -1190,9 +1187,7 @@ def _(data_bkg):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
-    classification. concatentate the background with non-background.
-    """)
+    mo.md(r"""classification. concatentate the background with non-background.""")
     return
 
 
@@ -1287,9 +1282,7 @@ def _(ConfusionMatrixDisplay, data_loo_c, plt):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
-    viz the ones we got wrong
-    """)
+    mo.md(r"""viz the ones we got wrong""")
     return
 
 
@@ -1315,21 +1308,25 @@ def _(data_loo_c, disagreement_selector, viz_sensor_readout):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
+    mo.md(
+        r"""
     # ☢️ traditional least squares estimation of the source location
 
     first, calibrate a curve that gives sensor response to the source as a function of distance from the source.
-    """)
+    """
+    )
     return
 
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
+    mo.md(
+        r"""
     ## calibration curve
 
     output of sensor as a function of distance from source.
-    """)
+    """
+    )
     return
 
 
@@ -1359,9 +1356,7 @@ def _(np, pd):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
-    ### fit detector response function to data
-    """)
+    mo.md(r"""### fit detector response function to data""")
     return
 
 
@@ -1409,11 +1404,13 @@ def _(np, opt_params, output_distance_data, plt, response_fun):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
+    mo.md(
+        r"""
     ### retreive distance from detector output
 
     second, given a sensor's reading, predict the distance of the source from it. this puts a circle around the sensor.
-    """)
+    """
+    )
     return
 
 
@@ -1443,11 +1440,13 @@ def _(find_distance_to_detector, opt_params):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
+    mo.md(
+        r"""
     ## least squares estimator for location of source
 
     third, given the response of the sensor network, select the subset of sensors that come into play with a detectable response.
-    """)
+    """
+    )
     return
 
 
@@ -1474,9 +1473,7 @@ def _(data, select_responsive_sensors, sensors):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
-    some of the experiments led to no detectable response for ANY sensor. these are false negatives.
-    """)
+    mo.md(r"""some of the experiments led to no detectable response for ANY sensor. these are false negatives.""")
     return
 
 
@@ -1489,9 +1486,7 @@ def _(data, select_responsive_sensors, sensors):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
-    when a SINGLE sensor in the network elicits a warning, we consider that a positive. but we need three for triangulation. so we select the top three sensors in terms of response from baseline.
-    """)
+    mo.md(r"""when a SINGLE sensor in the network elicits a warning, we consider that a positive. but we need three for triangulation. so we select the top three sensors in terms of response from baseline.""")
     return
 
 
@@ -1513,34 +1508,34 @@ def _(data, select_top_three_sensors, sensors):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
+    mo.md(
+        r"""
     ## ☢️ a sub-baseline: simple triangulation
 
     weighted average of significant sensor locations.
-    """)
+    """
+    )
     return
 
 
 @app.cell
 def _(np, select_top_three_sensors, sensor_to_loc):
-    def triangulation(data, exp, sensors, opt_params):
+    def dumb_triangulation(data, exp, sensors, opt_params):
         game_sensors = select_top_three_sensors(data, exp, sensors)
         wts = data.loc[exp, game_sensors] / data.loc[exp, game_sensors].sum()
         return np.sum([np.array(sensor_to_loc[sensor]) * wts[sensor] for sensor in game_sensors], axis=0)
-    return (triangulation,)
+    return (dumb_triangulation,)
 
 
 @app.cell
-def _(data, opt_params, sensors, triangulation):
-    triangulation(data, 0, sensors, opt_params)
+def _(data, dumb_triangulation, opt_params, sensors):
+    dumb_triangulation(data, 0, sensors, opt_params)
     return
 
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
-    finally, the traditional localization method that finds source location most consistent with the "measured" distance. here measured means we look at the response and infer the distance from the calibration curve. now we search for source location that is most consistent with those distances we measure.
-    """)
+    mo.md(r"""finally, the traditional localization method that finds source location most consistent with the "measured" distance. here measured means we look at the response and infer the distance from the calibration curve. now we search for source location that is most consistent with those distances we measure.""")
     return
 
 
@@ -1560,6 +1555,7 @@ def _(
     def trad_localize(data, exp, sensors, opt_params, verbose=False):
         if verbose:
             print(f"expt {exp}")
+        
         # what sensors are in the game?
         game_sensors = select_responsive_sensors(data, exp, sensors)
 
@@ -1567,8 +1563,8 @@ def _(
             print(f"FALSE NEGATIVE: expt {exp} has no detectors with significant response.")
             return np.array([np.nan, np.nan])
 
-        # just select three highest above Nds
-        if len(game_sensors) < 3:
+        if len(game_sensors) < 3: # we need three...
+            # just select three highest above Nds
             print(f"WARNING: expt {exp} has only {len(game_sensors)} detectors with significant response. selecting top 3.")
             game_sensors = select_top_three_sensors(data, exp, sensors)
 
@@ -1588,22 +1584,10 @@ def _(
         def objective(x):
             # residual := ~ distance if source were at x - measured distance
             return sum(
-                    (
-                        np.linalg.norm(x - game_sensors_xy[i]) - measured_distances[i] # residual
-                    ) ** 2
-                    for i in range(len(game_sensors))
+                # residual between sensor-source-loc distance and what we measure it to be
+                (np.linalg.norm(x - game_sensors_xy[i]) - measured_distances[i]) ** 2 # residual
+                for i in range(len(game_sensors))
             )
-
-        # initial guess using weighted centroid
-        # wts = data.loc[exp, game_sensors] / data.loc[exp, game_sensors].sum()
-        # initial_guess = np.sum(np.array(sensor_to_loc[sensor]) * wts[sensor] for sensor in game_sensors)
-
-        # opt_res = minimize(
-        #     objective,
-        #     initial_guess,
-        #     method="L-BFGS-B",
-        #     bounds=[(0.0, box_dims[0]), (0.0, box_dims[1])]
-        # )
 
         opt_res = differential_evolution(
             objective,
@@ -1626,9 +1610,7 @@ def _(
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
-    🥞 let's do it!
-    """)
+    mo.md(r"""🥞 let's do it!""")
     return
 
 
@@ -1649,8 +1631,8 @@ def _(calculate_errors, data, opt_params, sensors, trad_localize):
 
 
 @app.cell
-def _(calculate_errors, data, opt_params, sensors, triangulation):
-    xy_triangulation_preds = [triangulation(data, exp, sensors, opt_params) for exp in range(data.shape[0])]
+def _(calculate_errors, data, dumb_triangulation, opt_params, sensors):
+    xy_triangulation_preds = [dumb_triangulation(data, exp, sensors, opt_params) for exp in range(data.shape[0])]
 
     data_triangulation = data.copy()
     data_triangulation["x_s_pred"] = [xy_triangulation_preds[exp][0] for exp in range(data.shape[0])]
@@ -1663,9 +1645,7 @@ def _(calculate_errors, data, opt_params, sensors, triangulation):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
-    Vizualizes the source locations where no solution was able to be found b/c no significant sensors
-    """)
+    mo.md(r"""Vizualizes the source locations where no solution was able to be found b/c no significant sensors""")
     return
 
 
@@ -1678,9 +1658,7 @@ def _(data, data_trad, np, viz_source_locs):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
-    ...when the errors are huge.
-    """)
+    mo.md(r"""...when the errors are huge.""")
     return
 
 
@@ -1693,8 +1671,56 @@ def _(data, data_trad, viz_source_locs):
 
 
 @app.cell
+def _(data_loo):
+    data_loo["error"]
+    return
+
+
+@app.cell
+def _(data_trad):
+    data_trad["error"]
+    return
+
+
+@app.cell
+def _(data_loo):
+    data_loo["error"].rename({"error": "tree ensemble"})
+    return
+
+
+@app.cell
+def _(data_loo, data_trad, data_triangulation, pd):
+    all_errors = pd.merge(
+        pd.merge(
+            data_loo["error"].rename("tree\nensemble"), 
+            data_trad["error"].rename("trad\nlocalization"), 
+            left_index=True, right_index=True
+        ),
+        data_triangulation["error"].rename("naive\ntriangulation"),
+        left_index=True, right_index=True
+    )
+    all_errors = all_errors.melt(var_name='method', value_name='error')
+    all_errors
+    return (all_errors,)
+
+
+@app.cell
+def _(all_errors, plt, pt, sns):
+    # see https://github.com/pog87/PtitPrince/blob/master/tutorial_python/raincloud_tutorial_python.ipynb
+    _f, _ax = plt.subplots(figsize=(7, 5))
+    pt.RainCloud(
+        x="method", data=all_errors, y="error", hue="method", bw=0.25, ax=_ax, orient="h", palette=sns.color_palette("Set2")[:3]
+    )
+    _ax.set_xlim(xmin=0.0)
+    plt.savefig("error_rainclouds.pdf", format="pdf")
+    plt.show()
+    return
+
+
+@app.cell
 def _(
     data,
+    data_delta_loo,
     data_loo,
     data_trad,
     data_triangulation,
@@ -1725,23 +1751,35 @@ def _(
 
     plt.hist(
         data_triangulation.loc[expts_to_compare, "error"], 
-        alpha=0.5, label="triangulation", color=theme_colors[3], bins=_bins
+        alpha=0.5, label="naive triangulation", color=theme_colors[3], bins=_bins
     )
     plt.axvline(x=data_triangulation.loc[expts_to_compare, "error"].mean(), color=theme_colors[3])
 
+    # optional: delta learning
+    if False:
+        plt.hist(
+            data_delta_loo.loc[expts_to_compare, "error"], 
+            alpha=0.5, label="delta ML", color=theme_colors[4], bins=_bins
+        )
+        plt.axvline(x=data_delta_loo.loc[expts_to_compare, "error"].mean(), color=theme_colors[4])
+
     plt.xlabel("error [in]")
+    plt.xlim(xmin=0.0)
     plt.ylabel("# experiments")
     plt.title("LOO-CV error")
     plt.legend()
     plt.show()
-    return (expts_to_compare,)
+    return
+
+
+@app.cell
+def _():
+    return
 
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
-    # 🥔 delta learning.
-    """)
+    mo.md(r"""# 🥔 delta learning.""")
     return
 
 
@@ -1819,62 +1857,9 @@ def _(data_delta_loo, np, plt):
     return
 
 
-@app.cell
-def _(
-    data_delta_loo,
-    data_loo,
-    data_trad,
-    data_triangulation,
-    expts_to_compare,
-    np,
-    plt,
-    theme_colors,
-    thing_to_color,
-):
-    _expts_to_compare = data_delta_loo.index
-
-    #_bins = np.linspace(0, max(data_loo["error"].max(), data_trad["error"].max()), 20)
-    _bins = bins=np.linspace(0, 37, 41)
-    assert data_loo.shape[0] == data_trad.shape[0] # for comparison of errors
-
-    plt.figure()
-    plt.hist(
-        data_loo.loc[expts_to_compare, "error"], 
-        alpha=0.5, label="ensemble of trees", color=thing_to_color["ML"], bins=_bins
-    )
-    plt.axvline(x=data_loo.loc[expts_to_compare, "error"].mean(), color=thing_to_color["ML"])
-
-    plt.hist(
-        data_trad.loc[expts_to_compare, "error"], 
-        alpha=0.5, label="traditional localization", color=thing_to_color["trad"], bins=_bins
-    )
-    plt.axvline(x=data_trad.loc[expts_to_compare, "error"].mean(), color=thing_to_color["trad"])
-
-    plt.hist(
-        data_triangulation.loc[expts_to_compare, "error"], 
-        alpha=0.5, label="triangulation", color=theme_colors[3], bins=_bins
-    )
-    plt.axvline(x=data_triangulation.loc[expts_to_compare, "error"].mean(), color=theme_colors[3])
-
-    plt.hist(
-        data_delta_loo.loc[expts_to_compare, "error"], 
-        alpha=0.5, label="delta ML", color=theme_colors[4], bins=_bins
-    )
-    plt.axvline(x=data_delta_loo.loc[expts_to_compare, "error"].mean(), color=theme_colors[4])
-
-    plt.xlabel("error [in]")
-    plt.ylabel("# experiments")
-    plt.title("LOO-CV error")
-    plt.legend()
-    plt.show()
-    return
-
-
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
-    # Tracking
-    """)
+    mo.md(r"""# Tracking""")
     return
 
 
@@ -2017,14 +2002,14 @@ def _(
                 [data_loo.loc[i, "y_s"], data_loo.loc[i+1, "y_s"]],
                 color="grey", linestyle="-", alpha=0.3#, label="True path"
             )
-        
+
         for i in range(0, len(data_loo)-1):
             plt.plot(
                 [data_loo.loc[i, "x_s_pred"], data_loo.loc[i+1, "x_s_pred"]],
                 [data_loo.loc[i, "y_s_pred"], data_loo.loc[i+1, "y_s_pred"]],
                 color="red", linestyle="-", alpha=0.3#, label="Predicted  path"
             )
-    
+
         # viz uncertainty quantification by looking at whole ensemble.
         #xs_preds = np.array([xs[0] for xs in data_loo.loc[exp, "ensemble pred source locs"]])
         #ys_preds = np.array([xs[1] for xs in data_loo.loc[exp, "ensemble pred source locs"]])
