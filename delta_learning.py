@@ -321,24 +321,9 @@ def _(mo):
 
 
 @app.cell
-def _(
-    box_dims,
-    data,
-    plt,
-    sensor_to_loc,
-    sensor_to_nice_int,
-    sensors,
-    setup_environment,
-    thing_to_color,
-):
-    def viz_source_locs(data, ids=None, title=""):
-        if ids is None:
-            ids = range(data.shape[0])
-
-        setup_environment(box_dims)
-
-        # sensors
-        plt.scatter(
+def _(sensor_to_loc, sensors):
+    def viz_sensor_locs(ax):
+        ax.scatter(
             # x locs of sensors
             [sensor_to_loc[sensor][0] for sensor in sensors], 
             # y locs of sensors
@@ -349,7 +334,28 @@ def _(
             marker="s",
             label="sensor"
         )
+    return (viz_sensor_locs,)
 
+
+@app.cell
+def _(
+    box_dims,
+    data,
+    plt,
+    sensor_to_loc,
+    sensor_to_nice_int,
+    sensors,
+    setup_environment,
+    thing_to_color,
+    viz_sensor_locs,
+):
+    def viz_source_locs(data, ids=None, title=""):
+        if ids is None:
+            ids = range(data.shape[0])
+
+        fig, ax = setup_environment(box_dims)
+
+        viz_sensor_locs(ax)
         # sensor names
         for sensor in sensors:
             plt.annotate(
@@ -1720,7 +1726,7 @@ def _(all_errors, plt, pt, sns):
         )
     plt.savefig("error_rainclouds.pdf", format="pdf")
     plt.show()
-    return (i,)
+    return
 
 
 @app.cell(hide_code=True)
@@ -1848,28 +1854,17 @@ def _(tracking_data, viz_source_locs):
 
 
 @app.cell
-def _(i, sensors, tracking_data):
-    tracking_data.loc[i, sensors]
-    return
-
-
-@app.cell
-def _(tracking_data):
-    tracking_data
-    return
-
-
-@app.cell
 def _(sensors, tracking_data, tree_ensemble):
     def predict_track(tracking_data, tree_ensemble):
         pred_source_locs = tree_ensemble.predict(tracking_data.loc[:, sensors])
+        tracking_data_pred = tracking_data.copy()
         for i in range(len(tracking_data)):
-            tracking_data.loc[i, "x_s_pred"] = pred_source_locs[i][0]
-            tracking_data.loc[i, "y_s_pred"] = pred_source_locs[i][1]
-        return tracking_data
+            tracking_data_pred.loc[i, "x_s_pred"] = pred_source_locs[i][0]
+            tracking_data_pred.loc[i, "y_s_pred"] = pred_source_locs[i][1]
+        return tracking_data_pred
     
-    tracking_data_loo = predict_track(tracking_data, tree_ensemble)
-    return
+    tracking_data_pred = predict_track(tracking_data, tree_ensemble)
+    return (tracking_data_pred,)
 
 
 @app.cell
@@ -1877,85 +1872,41 @@ def _(
     box_dims,
     draw_obstacles,
     plt,
-    sensor_colormap,
-    sensor_to_loc,
-    sensors,
     setup_environment,
-    theme_colors,
     thing_to_color,
+    viz_sensor_locs,
 ):
-    def viz_track(data_loo):
+    def viz_track(tracking_data_pred, sensor_to_loc):
         max_response = 75.0 
 
         fig, ax = setup_environment(box_dims)
         draw_obstacles(ax)
 
-        for exp in range(len(data_loo)):
-            # source locs. color by error.
-            plt.scatter(
-                data_loo.loc[exp, "x_s"], data_loo.loc[exp, "y_s"],
-                clip_on=False, edgecolors="black", color=theme_colors[4],
-                s=65, marker="o",
-                label="true\nsource\nlocation"
-            )
-
-        # plot sensors
-        plt.scatter(
-            [sensor_to_loc[sensor][0] for sensor in sensors],
-            [sensor_to_loc[sensor][1] for sensor in sensors],
-            s=50, edgecolor="black", marker="s",
-            clip_on=False,
-            #c=[data_loo.loc[exp, sensor] for sensor in sensors],
-            vmin=0,
-            vmax=max_response,
-            label="sensor",
-            cmap=sensor_colormap
+        plt.plot(
+            [tracking_data_pred.loc[exp, "x_s"] for exp in range(len(tracking_data_pred))], 
+            [tracking_data_pred.loc[exp, "y_s"] for exp in range(len(tracking_data_pred))],
+            clip_on=False, 
+            color="black",
+            markerfacecolor=thing_to_color["true source loc"],
+            markeredgecolor=thing_to_color["true source loc"],
+            marker="o",
+            linestyle="--",
+            label="true\npath"
         )
 
-        plt.colorbar(label="count rate [CPS]", extend="max")
-
-        plt.scatter(
-            data_loo["x_s_pred"], data_loo["y_s_pred"], s=65, marker="+",
-            clip_on=False, color=thing_to_color["pred source loc"],
-            label="predicted\nsource location"
+        plt.plot(
+            [tracking_data_pred.loc[exp, "x_s_pred"] for exp in range(len(tracking_data_pred))], 
+            [tracking_data_pred.loc[exp, "y_s_pred"] for exp in range(len(tracking_data_pred))],
+            clip_on=False, 
+            color="black",
+            markerfacecolor=thing_to_color["pred source loc"],
+            markeredgecolor=thing_to_color["pred source loc"],
+            marker="o",
+            linestyle="--",
+            label="predicted\npath"
         )
-        """
-        for i in range(len(data_loo)):
-            plt.plot(
-                [data_loo.loc[i, "x_s"], data_loo.loc[i, "x_s_pred"]],
-                [data_loo.loc[i, "y_s"], data_loo.loc[i, "y_s_pred"]],
-                color="gray", linestyle="--", alpha=0.3
-            )
-        """
-        for i in range(0, len(data_loo)-1):
-            plt.plot(
-                [data_loo.loc[i, "x_s"], data_loo.loc[i+1, "x_s"]],
-                [data_loo.loc[i, "y_s"], data_loo.loc[i+1, "y_s"]],
-                color="grey", linestyle="-", alpha=0.3#, label="True path"
-            )
 
-        for i in range(0, len(data_loo)-1):
-            plt.plot(
-                [data_loo.loc[i, "x_s_pred"], data_loo.loc[i+1, "x_s_pred"]],
-                [data_loo.loc[i, "y_s_pred"], data_loo.loc[i+1, "y_s_pred"]],
-                color="red", linestyle="-", alpha=0.3#, label="Predicted  path"
-            )
-
-        # viz uncertainty quantification by looking at whole ensemble.
-        #xs_preds = np.array([xs[0] for xs in data_loo.loc[exp, "ensemble pred source locs"]])
-        #ys_preds = np.array([xs[1] for xs in data_loo.loc[exp, "ensemble pred source locs"]])
-        """
-        if n_samples > 0:
-            # plot samples of predicted responses
-            ids_trees = np.random.choice(np.arange(len(xs_preds)), n_samples)
-            plt.scatter(
-                xs_preds[ids_trees],
-                ys_preds[ids_trees],
-                marker="+", color=thing_to_color["pred source loc"], 
-                s=65,
-                label="predicted\nsource\nlocation\nsample", clip_on=False
-            )
-        """
+        viz_sensor_locs(ax)
 
         handles, labels = plt.gca().get_legend_handles_labels()
         plt.legend(handles[-3:], labels[-3:], bbox_to_anchor=(1.3, 0.5), loc='upper left', borderaxespad=0)
@@ -1965,8 +1916,8 @@ def _(
 
 
 @app.cell
-def _(tracking_data, viz_track):
-    viz_track(tracking_data)
+def _(sensor_to_loc, tracking_data_pred, viz_track):
+    viz_track(tracking_data_pred, sensor_to_loc)
     return
 
 
