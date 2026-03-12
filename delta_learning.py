@@ -38,6 +38,7 @@ def _():
         csv,
         differential_evolution,
         mo,
+        mpl,
         np,
         optimize,
         os,
@@ -596,14 +597,45 @@ def _(data, plt, sensor_to_nice_int, sensors, sns, theme_colors):
 
 
 @app.cell
-def _(data, np, plt, sensor_to_nice_int, sensors, sns):
-    _bins = np.geomspace(data[sensors].min().min(), data[sensors].max().max(), 30)
-    _g = sns.pairplot(data[sensors].rename(columns=sensor_to_nice_int), corner=True, diag_kws={'bins': _bins})
-    for _ax in _g.axes.flat:
-        if not _ax == None:
-            _ax.set_xscale('log')
-            _ax.set_yscale('log')
-    plt.show()
+def _(data, mpl, np, plt, sensor_to_nice_int, sensors, sns):
+    with sns.plotting_context("talk", font_scale=1.5):
+        _bins = np.geomspace(data[sensors].min().min(), data[sensors].max().max(), 30)
+        _g = sns.pairplot(
+            data[sensors].rename(columns=sensor_to_nice_int), 
+            corner=True, diag_kws={'bins': _bins, 'color': 'k'}, plot_kws={'color': 'k'}
+        )
+        for _ax in _g.axes.flat:
+            if not _ax == None:
+                _ax.set_xscale('log')
+                _ax.set_yscale('log')
+    
+        # color background via corr
+        C = data[sensors].corr()
+        C[C == 1.0] = 0.0
+        corr_scale = np.ceil(C.abs().max().max() * 10) / 10
+        cmap = sns.color_palette("vlag", as_cmap=True)
+        norm = mpl.colors.Normalize(vmin=-corr_scale, vmax=corr_scale, clip=False)
+        # loop over panels (i, j)
+        for _i in range(len(sensors)):
+            for _j in range(len(sensors)):
+                if _i == _j or _g.axes[_i, _j] is None:
+                    continue
+                _color = cmap(norm(C.loc[sensors[_i], sensors[_j]]))
+                _g.axes[_i, _j].set_facecolor(_color)
+    
+    
+        # Add axis in top-right corner [left, bottom, width, height] in figure coordinates
+        cbar_ax = _g.figure.add_axes([0.65, 0.65, 0.03, 0.25])
+        sm = mpl.cm.ScalarMappable(cmap=cmap, norm=norm)
+        sm.set_array([])
+        _g.figure.colorbar(sm, cax=cbar_ax, label='correlation')
+
+        _g.figure.supxlabel('sensor', y=-0.01)
+        _g.figure.supylabel('sensor', x=-0.01)
+
+        plt.savefig("sensor_network_readout_pairplot.pdf", format="pdf", bbox_inches='tight')
+    
+        plt.show()
     return
 
 
