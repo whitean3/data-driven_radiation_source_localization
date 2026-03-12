@@ -1070,7 +1070,7 @@ def _(data, n_sensors, np, plt, train_tree_ensemble):
 
     plt.figure()
     plt.xlabel("sensor")
-    plt.ylabel("feature importance")
+    plt.ylabel("importance score")
     plt.xticks(np.arange(n_sensors))
     plt.bar(np.arange(n_sensors), tree_ensemble.feature_importances_)
     return (tree_ensemble,)
@@ -1737,7 +1737,14 @@ def _(data, ids_wrong):
 
 
 @app.cell
-def _(data_loo, data_trad, data_triangulation, expts_to_compare, pd):
+def _(
+    data_delta_loo,
+    data_loo,
+    data_trad,
+    data_triangulation,
+    expts_to_compare,
+    pd,
+):
     all_errors = pd.merge(
         pd.merge(
             data_loo["error"].rename("tree\nensemble"), 
@@ -1747,6 +1754,8 @@ def _(data_loo, data_trad, data_triangulation, expts_to_compare, pd):
         data_triangulation["error"].rename("naive\ntriangulation"),
         left_index=True, right_index=True
     )
+    # delta learning too
+    all_errors = pd.merge(all_errors, data_delta_loo["error"].rename("delta\nlearning"), left_index=True, right_index=True)
     all_errors = all_errors.loc[expts_to_compare, :]
     all_errors = all_errors.melt(var_name='method', value_name='error')
     all_errors
@@ -1759,7 +1768,7 @@ def _(all_errors, plt, pt, sns):
     _f, _ax = plt.subplots(figsize=(7, 5))
     pt.RainCloud(
         x="method", data=all_errors.rename(columns={"error": "absolute error [in]"}), 
-        y="absolute error [in]", hue="method", bw=0.25, ax=_ax, orient="h", palette=sns.color_palette("Set2")[:3]#, cut=2
+        y="absolute error [in]", hue="method", bw=0.25, ax=_ax, orient="h", palette=sns.color_palette("Set2")[:4]#, cut=2
     )
     _ax.set_xlim(xmin=0.0)
     for i, method in enumerate(all_errors["method"].unique()):
@@ -1956,7 +1965,7 @@ def _(
         viz_sensor_locs(ax)
 
         handles, labels = plt.gca().get_legend_handles_labels()
-        plt.legend(handles[-3:], labels[-3:], loc=(0.625, 0.325), fontsize=10)
+        plt.legend(handles[-3:], labels[-3:], loc=(0.6, 0.325), fontsize=10)
 
         plt.show()
     return (viz_track,)
