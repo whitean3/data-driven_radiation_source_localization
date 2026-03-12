@@ -66,7 +66,7 @@ def _(sns):
         'ML': theme_colors[0],
         'trad': theme_colors[1]
     }
-    sensor_colormap = "Purples"
+    sensor_colormap = "Oranges_r"
 
     # theme_colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
     # sns.color_palette(theme_colors)
@@ -415,17 +415,21 @@ def _(draw_obstacles, plt):
 @app.cell
 def _(box_dims, patches, thing_to_color):
     def draw_obstacles(ax):
+        ht_to_alpha = lambda h : 0.5 + (1 - 0.5) / (4 - 1/2) * (h - 0.5)
+        # TODO: Andrew, put in heights of other obstacles
+    
         # circles (all lead)
-        r = 3.125 / 2
+        r = 3.1 / 2
         x_centers = [
-            [7, box_dims[1] - 17], 
-            [10, box_dims[1] - 17], 
-            [13, box_dims[1] - 17]
+            [7.75, box_dims[1] - 17], 
+            [10.75, box_dims[1] - 17], 
+            [13.75, box_dims[1] - 17]
         ]
-        for x_center in x_centers:
+        hts = [1.5, 1.0, 0.5]
+        for ht, x_center in zip(hts, x_centers):
             circle = patches.Circle(
                 x_center, r, 
-                color=thing_to_color["lead"], alpha=0.5
+                color=thing_to_color["lead"], alpha=ht_to_alpha(ht)
             )
             ax.add_patch(circle)
 
@@ -477,6 +481,16 @@ def _(box_dims, patches, thing_to_color):
             1.5
         ]
 
+        # draw table boundary
+        ax.axhline(0, linestyle="--", color="gray")
+        ax.axhline(box_dims[1], linestyle="--", color="gray")
+        ax.axvline(0, linestyle="--", color="gray")
+        ax.axvline(box_dims[0], linestyle="--", color="gray")
+
+        padding = 1.0 
+        ax.set_xlim(-padding, box_dims[0]+padding)
+        ax.set_ylim(-padding, box_dims[1]+padding)
+    
         mat = ["lead" for i in range(7)] + [
             "cardboard"] + ["MDF" for i in range(4)] + ["pine"]
         for r in range(len(x_bs)):
@@ -800,8 +814,10 @@ def _(box_dims, data_loo, plt):
     def xy_parity_plot(data):
         f, (ax1, ax2) = plt.subplots(1, 2)
         plt.subplots_adjust(wspace=0.3)
-        for ax in [ax1, ax2]:
+        for i, ax in enumerate([ax1, ax2]):
             ax.set_aspect('equal', 'box')
+            ax.axhline(box_dims[i], linestyle="--", color="gray")
+            ax.axvline(box_dims[i], linestyle="--", color="gray")
 
         ax1.set_xlim(0, box_dims[0])
         ax1.set_ylim(0, box_dims[0])
@@ -1278,6 +1294,7 @@ def _(ConfusionMatrixDisplay, data_loo_c, plt):
         data_loo_c["background"].values, data_loo_c["pred_safe"].values,
         text_kw={'fontsize': 20}
     )
+    print("turn off grid")
     cm.ax_.tick_params(axis='x', labelsize=16)
     cm.ax_.tick_params(axis='y', labelsize=16)
     cm.ax_.set_xlabel('predicted label', fontsize=20)
@@ -1862,7 +1879,7 @@ def _(sensors, tracking_data, tree_ensemble):
             tracking_data_pred.loc[i, "x_s_pred"] = pred_source_locs[i][0]
             tracking_data_pred.loc[i, "y_s_pred"] = pred_source_locs[i][1]
         return tracking_data_pred
-    
+
     tracking_data_pred = predict_track(tracking_data, tree_ensemble)
     return (tracking_data_pred,)
 
@@ -1891,7 +1908,7 @@ def _(
             markeredgecolor=thing_to_color["true source loc"],
             marker="o",
             linestyle="--",
-            label="true\npath"
+            label="true path"
         )
 
         plt.plot(
@@ -1903,13 +1920,13 @@ def _(
             markeredgecolor=thing_to_color["pred source loc"],
             marker="o",
             linestyle="--",
-            label="predicted\npath"
+            label="predicted path"
         )
 
         viz_sensor_locs(ax)
 
         handles, labels = plt.gca().get_legend_handles_labels()
-        plt.legend(handles[-3:], labels[-3:], bbox_to_anchor=(1.3, 0.5), loc='upper left', borderaxespad=0)
+        plt.legend(handles[-3:], labels[-3:], loc=(0.625, 0.325), fontsize=10)
 
         plt.show()
     return (viz_track,)
