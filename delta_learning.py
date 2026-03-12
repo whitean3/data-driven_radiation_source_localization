@@ -26,6 +26,7 @@ def _():
     plt.style.use('rose-pine-dawn.mplstyle') # https://github.com/h4pZ/rose-pine-matplotlib/tree/main/themes
     fm.fontManager.addfont("SourceCodePro-Regular.ttf") # https://fonts.google.com/specimen/Source+Code+Pro
     plt.rcParams["font.family"] = "Source Code Pro"
+    plt.rcParams['axes.grid'] = False
 
     from sklearn.ensemble import ExtraTreesClassifier, ExtraTreesRegressor, IsolationForest
     from sklearn.model_selection import LeaveOneOut, train_test_split
@@ -406,8 +407,15 @@ def _(draw_obstacles, plt):
         plt.xlabel("x [in]")
         plt.ylabel("y [in]")
 
-        plt.xlim(0, box_dims[0])
-        plt.ylim(0, box_dims[1])
+        padding = 1.0
+        plt.xlim(-padding, box_dims[0]+padding)
+        plt.ylim(-padding, box_dims[1]+padding)
+
+        # draw table boundary
+        ax.plot([0, 0], [0, box_dims[1]], linestyle="--", color="gray", zorder=0) # left vert
+        ax.plot([box_dims[0], box_dims[0]], [0, box_dims[1]], linestyle="--", color="gray", zorder=0) # right vert
+        ax.plot([0, box_dims[0]], [0, 0], linestyle="--", color="gray", zorder=0) # bottom horiz
+        ax.plot([0, box_dims[0]], [box_dims[1], box_dims[1]], linestyle="--", color="gray", zorder=0) # top horiz
 
         return fig, ax
     return (setup_environment,)
@@ -481,16 +489,6 @@ def _(box_dims, patches, thing_to_color):
             # pine
             1.5
         ]
-
-        # draw table boundary
-        ax.axhline(0, linestyle="--", color="gray")
-        ax.axhline(box_dims[1], linestyle="--", color="gray")
-        ax.axvline(0, linestyle="--", color="gray")
-        ax.axvline(box_dims[0], linestyle="--", color="gray")
-
-        padding = 1.0 
-        ax.set_xlim(-padding, box_dims[0]+padding)
-        ax.set_ylim(-padding, box_dims[1]+padding)
     
         mat = ["lead" for i in range(7)] + [
             "cardboard"] + ["MDF" for i in range(4)] + ["pine"]
