@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.14.17"
+__generated_with = "0.17.7"
 app = marimo.App(width="medium")
 
 
@@ -26,8 +26,7 @@ def _():
     plt.style.use('rose-pine-dawn.mplstyle') # https://github.com/h4pZ/rose-pine-matplotlib/tree/main/themes
     fm.fontManager.addfont("SourceCodePro-Regular.ttf") # https://fonts.google.com/specimen/Source+Code+Pro
     plt.rcParams["font.family"] = "Source Code Pro"
-    plt.rcParams['axes.grid'] = False
-
+    plt.rcParams["font.size"] = 16
     from sklearn.ensemble import ExtraTreesClassifier, ExtraTreesRegressor, IsolationForest
     from sklearn.model_selection import LeaveOneOut, train_test_split
     return (
@@ -39,7 +38,6 @@ def _():
         csv,
         differential_evolution,
         mo,
-        mpl,
         np,
         optimize,
         os,
@@ -68,7 +66,7 @@ def _(sns):
         'ML': theme_colors[0],
         'trad': theme_colors[1]
     }
-    sensor_colormap = "Oranges_r"
+    sensor_colormap = "Purples"
 
     # theme_colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
     # sns.color_palette(theme_colors)
@@ -78,8 +76,7 @@ def _(sns):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(
-        r"""
+    mo.md(r"""
     # ::icon-park:data:: read in sensor network response data
 
     * each data set is the sensor network response to a source in a particular location.
@@ -88,8 +85,7 @@ def _(mo):
     * the list of source locations are below.
 
     ## locations of detectors in the environment
-    """
-    )
+    """)
     return
 
 
@@ -132,8 +128,7 @@ def _(box_dims, n_sensors, np):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(
-        r"""
+    mo.md(r"""
     ## locations of the radioactive source placed in the environment
 
     the first 25 rows come from Latin Hypercube sampling.
@@ -141,8 +136,7 @@ def _(mo):
     the next 25 rows are manually-selected on the corners/boundary.
 
     the remaining 25 are from another round of Latin Hypercube sampling.
-    """
-    )
+    """)
     return
 
 
@@ -161,7 +155,9 @@ def _(box_dims, pd):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""## read in sensor responses""")
+    mo.md(r"""
+    ## read in sensor responses
+    """)
     return
 
 
@@ -235,15 +231,13 @@ def _(detector_outputs):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(
-        r"""
+    mo.md(r"""
     ## re-work data into an ML-friendly format
 
     ::lucide:lightbulb:: source locations paired with sensor network response vectors
 
     first, get list of sensors in the network.
-    """
-    )
+    """)
     return
 
 
@@ -258,7 +252,9 @@ def _(detector_outputs, n_sensors):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""next, from a sensor network response data frame, extract the count rate of a particular sensor.""")
+    mo.md(r"""
+    next, from a sensor network response data frame, extract the count rate of a particular sensor.
+    """)
     return
 
 
@@ -276,14 +272,12 @@ def _(detector_outputs, np, sensors):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(
-        r"""
+    mo.md(r"""
     🎯 goal:
 
     * each row is an experiment where we place the source at a location and observe the sensor network response
     * the row lists the source location paired with the sensor response vector.
-    """
-    )
+    """)
     return
 
 
@@ -312,13 +306,11 @@ def _(data, np, sensors):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(
-        r"""
+    mo.md(r"""
     ## ::lucide:sailboat:: visually explore the data
 
     first, where are the source locations over all experiments?
-    """
-    )
+    """)
     return
 
 
@@ -382,16 +374,24 @@ def _(
         handles, labels = plt.gca().get_legend_handles_labels()
         by_label = dict(zip(labels, handles))
         plt.legend(by_label.values(), by_label.keys(), bbox_to_anchor=(1.05, 0.8), loc='upper left', borderaxespad=0)
-
+        plt.savefig("source_locs.pdf", format="pdf", bbox_inches='tight')
         plt.show()
 
     viz_source_locs(data)
     return (viz_source_locs,)
 
 
+@app.cell
+def _(data, viz_source_locs):
+    viz_source_locs(data)
+    return
+
+
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""second, visualize the sensor readout and source location for a single experiment.""")
+    mo.md(r"""
+    second, visualize the sensor readout and source location for a single experiment.
+    """)
     return
 
 
@@ -407,15 +407,8 @@ def _(draw_obstacles, plt):
         plt.xlabel("x [in]")
         plt.ylabel("y [in]")
 
-        padding = 1.0
-        plt.xlim(-padding, box_dims[0]+padding)
-        plt.ylim(-padding, box_dims[1]+padding)
-
-        # draw table boundary
-        ax.plot([0, 0], [0, box_dims[1]], linestyle="--", color="gray", zorder=0) # left vert
-        ax.plot([box_dims[0], box_dims[0]], [0, box_dims[1]], linestyle="--", color="gray", zorder=0) # right vert
-        ax.plot([0, box_dims[0]], [0, 0], linestyle="--", color="gray", zorder=0) # bottom horiz
-        ax.plot([0, box_dims[0]], [box_dims[1], box_dims[1]], linestyle="--", color="gray", zorder=0) # top horiz
+        plt.xlim(0, box_dims[0])
+        plt.ylim(0, box_dims[1])
 
         return fig, ax
     return (setup_environment,)
@@ -424,23 +417,23 @@ def _(draw_obstacles, plt):
 @app.cell
 def _(box_dims, patches, thing_to_color):
     def draw_obstacles(ax):
-        ht_to_alpha = lambda h : 0.5 + (1 - 0.5) / (4 - 1/2) * (h - 0.5)
-        # TODO: Andrew, put in heights of other obstacles
-    
         # circles (all lead)
-        r = 3.1 / 2
+        alphas = [0.6,0.4,0.2]
+        a=0
+        r = 3.125 / 2
         x_centers = [
             [7.75, box_dims[1] - 17], 
             [10.75, box_dims[1] - 17], 
             [13.75, box_dims[1] - 17]
         ]
-        hts = [1.5, 1.0, 0.5]
-        for ht, x_center in zip(hts, x_centers):
+        for x_center in x_centers:
+
             circle = patches.Circle(
                 x_center, r, 
-                color=thing_to_color["lead"], alpha=ht_to_alpha(ht)
+                color=thing_to_color["lead"], alpha=alphas[a]
             )
             ax.add_patch(circle)
+            a+=1
 
         # rectangles (different materials)
         x_bs = [
@@ -489,17 +482,66 @@ def _(box_dims, patches, thing_to_color):
             # pine
             1.5
         ]
-    
+
         mat = ["lead" for i in range(7)] + [
             "cardboard"] + ["MDF" for i in range(4)] + ["pine"]
         for r in range(len(x_bs)):
+            if ws[r] ==2 and hs[r]==8 or ws[r]==8 and hs[r]==2:
+                alpha = 0.9
+            else:
+                alpha =0.7
             rectangle = patches.Rectangle(
-                x_bs[r], ws[r], hs[r], 
-                color=thing_to_color[mat[r]], alpha=0.5, 
+                x_bs[r], ws[r], hs[r],
+                color=thing_to_color[mat[r]], alpha=alpha, 
                 label=mat[r]
             )
             ax.add_patch(rectangle)
     return (draw_obstacles,)
+
+
+@app.cell
+def _(
+    box_dims,
+    plt,
+    sensor_to_loc,
+    sensor_to_nice_int,
+    sensors,
+    setup_environment,
+):
+    def _():
+        setup_environment(box_dims)
+        plt.scatter(
+                # x locs of sensors
+                [sensor_to_loc[sensor][0] for sensor in sensors], 
+                # y locs of sensors
+                [sensor_to_loc[sensor][1] for sensor in sensors],
+                s=65,
+                c="white",
+                edgecolor="black",
+                vmin=0,
+                marker="s",
+                label="sensor"
+            )
+
+        for sensor in sensors:
+            plt.annotate(
+                f"{sensor_to_nice_int[sensor]}",
+                (sensor_to_loc[sensor][0], sensor_to_loc[sensor][1]),
+                xytext=(5, 5),
+                textcoords="offset points", 
+                ha='left',
+                va='bottom'
+            )
+        # legend w unique entries
+        handles, labels = plt.gca().get_legend_handles_labels()
+        by_label = dict(zip(labels, handles))
+        plt.legend(by_label.values(), by_label.keys(), bbox_to_anchor=(1.05, 0.8), loc='upper left', borderaxespad=0)
+
+        plt.savefig("layout.pdf", format="pdf", bbox_inches='tight')
+        return plt.show()
+
+    _()
+    return
 
 
 @app.cell
@@ -552,13 +594,14 @@ def _(
             s=65, color=thing_to_color["true source loc"], label="source\nlocation", clip_on=False
         )
 
-        plt.title(f"experiment {exp}")
+        # plt.title(f"experiment {exp}")
 
         # legend w unique entries
         handles, labels = plt.gca().get_legend_handles_labels()
         by_label = dict(zip(labels, handles))
-        plt.legend(by_label.values(), by_label.keys(), bbox_to_anchor=(1.25, 0.8), loc='upper left', borderaxespad=0)
+        plt.legend(by_label.values(), by_label.keys(), bbox_to_anchor=(1.3, 0.8), loc='upper left', borderaxespad=0)
 
+        plt.savefig("example_exp_11.pdf", format="pdf", bbox_inches='tight')
         plt.show()
 
     viz_sensor_readout(data, 11, label_sensors=True)
@@ -566,8 +609,26 @@ def _(
 
 
 @app.cell
+def _(data):
+    data.loc[11]
+    return
+
+
+@app.cell
+def _(sensor_to_nice_int):
+    sensor_to_nice_int
+    return
+
+
+@app.cell
+def _(data, viz_sensor_readout):
+    viz_sensor_readout(data, 11, label_sensors=True)
+    return
+
+
+@app.cell
 def _(data, viz_source_locs):
-    viz_source_locs(data, ids=[1, 40, 41, 57, 63], title="false negatives")
+    viz_source_locs(data, ids=[1, 40, 41, 57, 63]) #title="false negatives")
     return
 
 
@@ -579,7 +640,9 @@ def _(data, viz_source_locs):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""the distribution of the detector responses over all experiments and correlations between them. use a log scale.""")
+    mo.md(r"""
+    the distribution of the detector responses over all experiments and correlations between them. use a log scale.
+    """)
     return
 
 
@@ -595,45 +658,14 @@ def _(data, plt, sensor_to_nice_int, sensors, sns, theme_colors):
 
 
 @app.cell
-def _(data, mpl, np, plt, sensor_to_nice_int, sensors, sns):
-    with sns.plotting_context("talk", font_scale=1.5):
-        _bins = np.geomspace(data[sensors].min().min(), data[sensors].max().max(), 30)
-        _g = sns.pairplot(
-            data[sensors].rename(columns=sensor_to_nice_int), 
-            corner=True, diag_kws={'bins': _bins, 'color': 'k'}, plot_kws={'color': 'k'}
-        )
-        for _ax in _g.axes.flat:
-            if not _ax == None:
-                _ax.set_xscale('log')
-                _ax.set_yscale('log')
-    
-        # color background via corr
-        C = data[sensors].corr()
-        C[C == 1.0] = 0.0
-        corr_scale = np.ceil(C.abs().max().max() * 10) / 10
-        cmap = sns.color_palette("vlag", as_cmap=True)
-        norm = mpl.colors.Normalize(vmin=-corr_scale, vmax=corr_scale, clip=False)
-        # loop over panels (i, j)
-        for _i in range(len(sensors)):
-            for _j in range(len(sensors)):
-                if _i == _j or _g.axes[_i, _j] is None:
-                    continue
-                _color = cmap(norm(C.loc[sensors[_i], sensors[_j]]))
-                _g.axes[_i, _j].set_facecolor(_color)
-    
-    
-        # Add axis in top-right corner [left, bottom, width, height] in figure coordinates
-        cbar_ax = _g.figure.add_axes([0.65, 0.65, 0.03, 0.25])
-        sm = mpl.cm.ScalarMappable(cmap=cmap, norm=norm)
-        sm.set_array([])
-        _g.figure.colorbar(sm, cax=cbar_ax, label='correlation')
-
-        _g.figure.supxlabel('sensor', y=-0.01)
-        _g.figure.supylabel('sensor', x=-0.01)
-
-        plt.savefig("sensor_network_readout_pairplot.pdf", format="pdf", bbox_inches='tight')
-    
-        plt.show()
+def _(data, np, plt, sensor_to_nice_int, sensors, sns):
+    _bins = np.geomspace(data[sensors].min().min(), data[sensors].max().max(), 30)
+    _g = sns.pairplot(data[sensors].rename(columns=sensor_to_nice_int), corner=True, diag_kws={'bins': _bins})
+    for _ax in _g.axes.flat:
+        if not _ax == None:
+            _ax.set_xscale('log')
+            _ax.set_yscale('log')
+    plt.show()
     return
 
 
@@ -665,8 +697,7 @@ def _(data, np, plt, sensor_to_nice_int, sensors, sns):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(
-        r"""
+    mo.md(r"""
     # ☢️ source location predictor
 
     ML task: predict source location from sensor network response
@@ -677,8 +708,7 @@ def _(mo):
     **output**: 2D source location
 
     ## leave-one-out cross validation
-    """
-    )
+    """)
     return
 
 
@@ -810,7 +840,9 @@ def _(data, do_loo_cv, don_run_loo_cv):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""analyze error := norm of true source location vector minus predicted source location vector.""")
+    mo.md(r"""
+    analyze error := norm of true source location vector minus predicted source location vector.
+    """)
     return
 
 
@@ -835,19 +867,20 @@ def _(data_loo, plt):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""parity plot over cross-validation procedure.""")
+    mo.md(r"""
+    parity plot over cross-validation procedure.
+    """)
     return
 
 
 @app.cell
 def _(box_dims, data_loo, plt):
     def xy_parity_plot(data):
-        f, (ax1, ax2) = plt.subplots(1, 2)
-        plt.subplots_adjust(wspace=0.3)
-        for i, ax in enumerate([ax1, ax2]):
-            ax.set_aspect('equal', 'box')
-            ax.axhline(box_dims[i], linestyle="--", color="gray")
-            ax.axvline(box_dims[i], linestyle="--", color="gray")
+        f, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 5))  # explicit figure size helps
+        plt.subplots_adjust(wspace=0.4)  # reduced from 1 → avoids over-spacing
+
+        for ax in [ax1, ax2]:
+            ax.set_aspect("equal", share=True)
 
         ax1.set_xlim(0, box_dims[0])
         ax1.set_ylim(0, box_dims[0])
@@ -856,7 +889,6 @@ def _(box_dims, data_loo, plt):
 
         ax1.set_xticks([0, 10, 20, 30, 40])
         ax1.set_yticks([0, 10, 20, 30, 40])
-
         ax2.set_xticks([0, 5, 10, 15, 20, 25, 30])
         ax2.set_yticks([0, 5, 10, 15, 20, 25, 30])
 
@@ -868,14 +900,15 @@ def _(box_dims, data_loo, plt):
         ax1.plot([0, box_dims[0]], [0, box_dims[0]], color="black", linestyle="--")
         ax2.plot([0, box_dims[1]], [0, box_dims[1]], color="black", linestyle="--")
 
-        ax1.scatter(data["x_s"], data["x_s_pred"], clip_on=False)
-        ax2.scatter(data["y_s"], data["y_s_pred"], clip_on=False)
+        ax1.scatter(data["x_s"], data["x_s_pred"])  # removed clip_on=False
+        ax2.scatter(data["y_s"], data["y_s_pred"])  # removed clip_on=False
 
         x_err = data["error_x"].mean()
         y_err = data["error_y"].mean()
-        ax1.legend(title=f"error = {x_err:.2f} in")
-        ax2.legend(title=f"error = {y_err:.2f} in")
+        ax1.legend(title=f"error = {x_err:.2f} in", loc='upper left')
+        ax2.legend(title=f"error = {y_err:.2f} in", loc='upper left')
 
+        plt.savefig("XY_reg_parity.pdf", format="pdf", bbox_inches='tight')
         plt.show()
 
     xy_parity_plot(data_loo)
@@ -930,8 +963,8 @@ def _(
             )
 
         handles, labels = plt.gca().get_legend_handles_labels()
-        plt.legend(handles[-3:], labels[-3:], bbox_to_anchor=(1.3, 0.5), loc='upper left', borderaxespad=0)
-
+        plt.legend(handles[-3:], labels[-3:], bbox_to_anchor=(1.35, 1), loc='upper left', borderaxespad=0)
+        plt.savefig("err_viz.pdf", format="pdf", bbox_inches='tight')
         plt.show()
 
     explain_errors(data_loo)
@@ -984,6 +1017,7 @@ def _(
     plt,
     sensor_colormap,
     sensor_to_loc,
+    sensor_to_nice_int,
     sensors,
     setup_environment,
     theme_colors,
@@ -1035,20 +1069,30 @@ def _(
         if incl_ellipse:
             draw_confidence_ellipse(xs_preds, ys_preds, ax, facecolor=thing_to_color["pred source loc"], alpha=0.2)
             draw_confidence_ellipse(xs_preds, ys_preds, ax, n_std=2.0, facecolor=thing_to_color["pred source loc"], alpha=0.2)
-
+        for sensor in sensors:
+                plt.annotate(
+                    f"{sensor_to_nice_int[sensor]}",
+                    (sensor_to_loc[sensor][0], sensor_to_loc[sensor][1]),
+                    xytext=(5, 5),
+                    textcoords="offset points", 
+                    ha='left',
+                    va='bottom'
+                )
         handles, labels = plt.gca().get_legend_handles_labels()
         plt.legend(handles[-3:], labels[-3:], bbox_to_anchor=(1.3, 0.5), loc='upper left', borderaxespad=0)
-
+        plt.savefig("conf_ellipse.pdf", format="pdf", bbox_inches='tight')
         plt.show()
-
-    _exp = 12
+        #plt.savefig("conf_ellipse.pdf", format="pdf")
+    _exp = 30
     viz_prediction(data_loo, _exp, n_samples=25)
     return
 
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""### sensor importance""")
+    mo.md(r"""
+    ### sensor importance
+    """)
     return
 
 
@@ -1070,7 +1114,7 @@ def _(data, n_sensors, np, plt, train_tree_ensemble):
 
     plt.figure()
     plt.xlabel("sensor")
-    plt.ylabel("importance score")
+    plt.ylabel("feature importance")
     plt.xticks(np.arange(n_sensors))
     plt.bar(np.arange(n_sensors), tree_ensemble.feature_importances_)
     return (tree_ensemble,)
@@ -1084,6 +1128,7 @@ def _(
     n_sensors,
     plt,
     sensor_to_loc,
+    sensor_to_nice_int,
     sensors,
     setup_environment,
     tree_ensemble,
@@ -1102,11 +1147,19 @@ def _(
             vmin=0,
             vmax=tree_ensemble.feature_importances_.max(),
             label="sensor",
-            cmap="plasma"
+            cmap="viridis"
         )
-
+        for sensor in sensors:
+                plt.annotate(
+                    f"{sensor_to_nice_int[sensor]}",
+                    (sensor_to_loc[sensor][0], sensor_to_loc[sensor][1]),
+                    xytext=(5, 5),
+                    textcoords="offset points", 
+                    ha='left',
+                    va='bottom'
+                )
         plt.colorbar(label="sensor importance")
-
+        plt.savefig("sensor_importance.pdf", format="pdf", bbox_inches='tight')
         # plt.title("sensor importance")
         plt.show()
 
@@ -1116,7 +1169,9 @@ def _(
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""## learning curve""")
+    mo.md(r"""
+    ## learning curve
+    """)
     return
 
 
@@ -1165,21 +1220,20 @@ def _(learning_curve, plt, run_learning_curve):
         )
         plt.title("learning curve")
         plt.ylim(ymin=0)
+        plt.savefig("learning_curve.pdf", format="pdf", bbox_inches='tight')
         plt.show()
     return
 
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(
-        r"""
+    mo.md(r"""
     # ☢️ source presence classifier
 
     distinguish source presence from background.
 
     ##  background data
-    """
-    )
+    """)
     return
 
 
@@ -1240,14 +1294,16 @@ def _(data_bkg):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""classification. concatentate the background with non-background.""")
+    mo.md(r"""
+    classification. concatentate the background with non-background.
+    """)
     return
 
 
 @app.cell
 def _(data, data_bkg, np, pd):
     data_c = pd.concat([data, data_bkg], ignore_index=True)
-    data_c["background"] = data_c["x_s"].map(lambda x_s : "background" if np.isnan(x_s) else "non-background")
+    data_c["background"] = data_c["x_s"].map(lambda x_s : "background" if np.isnan(x_s) else "source present")
     data_c
     return (data_c,)
 
@@ -1324,19 +1380,22 @@ def _(ConfusionMatrixDisplay, data_loo_c, plt):
         data_loo_c["background"].values, data_loo_c["pred_safe"].values,
         text_kw={'fontsize': 20}
     )
-    print("turn off grid")
     cm.ax_.tick_params(axis='x', labelsize=16)
     cm.ax_.tick_params(axis='y', labelsize=16)
+    cm.ax_.grid(False)
     cm.ax_.set_xlabel('predicted label', fontsize=20)
     cm.ax_.set_ylabel('true label', fontsize=20)
     cm.im_.colorbar.set_label('# instances', fontsize=18)
+    plt.savefig("confusion_matrix.pdf", format="pdf", bbox_inches='tight')
     plt.show()
     return
 
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""viz the ones we got wrong""")
+    mo.md(r"""
+    viz the ones we got wrong
+    """)
     return
 
 
@@ -1362,25 +1421,21 @@ def _(data_loo_c, disagreement_selector, viz_sensor_readout):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(
-        r"""
+    mo.md(r"""
     # ☢️ traditional least squares estimation of the source location
 
     first, calibrate a curve that gives sensor response to the source as a function of distance from the source.
-    """
-    )
+    """)
     return
 
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(
-        r"""
+    mo.md(r"""
     ## calibration curve
 
     output of sensor as a function of distance from source.
-    """
-    )
+    """)
     return
 
 
@@ -1410,7 +1465,9 @@ def _(np, pd):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""### fit detector response function to data""")
+    mo.md(r"""
+    ### fit detector response function to data
+    """)
     return
 
 
@@ -1458,13 +1515,11 @@ def _(np, opt_params, output_distance_data, plt, response_fun):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(
-        r"""
+    mo.md(r"""
     ### retreive distance from detector output
 
     second, given a sensor's reading, predict the distance of the source from it. this puts a circle around the sensor.
-    """
-    )
+    """)
     return
 
 
@@ -1494,13 +1549,11 @@ def _(find_distance_to_detector, opt_params):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(
-        r"""
+    mo.md(r"""
     ## least squares estimator for location of source
 
     third, given the response of the sensor network, select the subset of sensors that come into play with a detectable response.
-    """
-    )
+    """)
     return
 
 
@@ -1527,7 +1580,9 @@ def _(data, select_responsive_sensors, sensors):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""some of the experiments led to no detectable response for ANY sensor. these are false negatives.""")
+    mo.md(r"""
+    some of the experiments led to no detectable response for ANY sensor. these are false negatives.
+    """)
     return
 
 
@@ -1540,7 +1595,9 @@ def _(data, select_responsive_sensors, sensors):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""when a SINGLE sensor in the network elicits a warning, we consider that a positive. but we need three for triangulation. so we select the top three sensors in terms of response from baseline.""")
+    mo.md(r"""
+    when a SINGLE sensor in the network elicits a warning, we consider that a positive. but we need three for triangulation. so we select the top three sensors in terms of response from baseline.
+    """)
     return
 
 
@@ -1562,7 +1619,9 @@ def _(data, select_top_three_sensors, sensors):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""finally, the traditional localization method that finds source location most consistent with the "measured" distance. here measured means we look at the response and infer the distance from the calibration curve. now we search for source location that is most consistent with those distances we measure.""")
+    mo.md(r"""
+    finally, the traditional localization method that finds source location most consistent with the "measured" distance. here measured means we look at the response and infer the distance from the calibration curve. now we search for source location that is most consistent with those distances we measure.
+    """)
     return
 
 
@@ -1637,7 +1696,9 @@ def _(
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""🥞 let's do it!""")
+    mo.md(r"""
+    🥞 let's do it!
+    """)
     return
 
 
@@ -1657,15 +1718,25 @@ def _(calculate_errors, data, opt_params, sensors, trad_localize):
     return (data_trad,)
 
 
+@app.cell
+def _(data_trad):
+    data_trad[data_trad["error"]>20]
+    return
+
+
+@app.cell
+def _(data_loo, data_trad):
+    data_loo[data_trad["error"]>20]
+    return
+
+
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(
-        r"""
+    mo.md(r"""
     ## ☢️ a sub-baseline: simple triangulation
 
     weighted average of significant sensor locations.
-    """
-    )
+    """)
     return
 
 
@@ -1699,7 +1770,9 @@ def _(calculate_errors, data, dumb_triangulation, opt_params, sensors):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""Vizualizes the source locations where no solution was able to be found b/c no significant sensors""")
+    mo.md(r"""
+    Vizualizes the source locations where no solution was able to be found b/c no significant sensors
+    """)
     return
 
 
@@ -1712,7 +1785,9 @@ def _(data, data_trad, np, viz_source_locs):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""...when the errors are huge.""")
+    mo.md(r"""
+    ...when the errors are huge.
+    """)
     return
 
 
@@ -1726,7 +1801,9 @@ def _(data, data_trad, viz_source_locs):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""## compare errors among methods""")
+    mo.md(r"""
+    ## compare errors among methods
+    """)
     return
 
 
@@ -1737,14 +1814,7 @@ def _(data, ids_wrong):
 
 
 @app.cell
-def _(
-    data_delta_loo,
-    data_loo,
-    data_trad,
-    data_triangulation,
-    expts_to_compare,
-    pd,
-):
+def _(data_loo, data_trad, data_triangulation, expts_to_compare, pd):
     all_errors = pd.merge(
         pd.merge(
             data_loo["error"].rename("tree\nensemble"), 
@@ -1754,8 +1824,6 @@ def _(
         data_triangulation["error"].rename("naive\ntriangulation"),
         left_index=True, right_index=True
     )
-    # delta learning too
-    all_errors = pd.merge(all_errors, data_delta_loo["error"].rename("delta\nlearning"), left_index=True, right_index=True)
     all_errors = all_errors.loc[expts_to_compare, :]
     all_errors = all_errors.melt(var_name='method', value_name='error')
     all_errors
@@ -1768,7 +1836,7 @@ def _(all_errors, plt, pt, sns):
     _f, _ax = plt.subplots(figsize=(7, 5))
     pt.RainCloud(
         x="method", data=all_errors.rename(columns={"error": "absolute error [in]"}), 
-        y="absolute error [in]", hue="method", bw=0.25, ax=_ax, orient="h", palette=sns.color_palette("Set2")[:4]#, cut=2
+        y="absolute error [in]", hue="method", bw=0.25, ax=_ax, orient="h", palette=sns.color_palette("Set2")[:3]#, cut=2
     )
     _ax.set_xlim(xmin=0.0)
     for i, method in enumerate(all_errors["method"].unique()):
@@ -1776,18 +1844,44 @@ def _(all_errors, plt, pt, sns):
         _ax.text(
             x=_ax.get_xlim()[1],  # right edge
             y=i-0.4,           # slightly above each cloud
-            s=f"mean: {mean_err:.3f} in",
+            s=f"mean: {mean_err:.2f} in",
             ha="right", va="bottom",
-            fontsize=9, color="black"
+            fontsize=12, color="black"
         )
-    plt.savefig("error_rainclouds.pdf", format="pdf")
+    plt.savefig("error_rainclouds.pdf", format="pdf", bbox_inches='tight')
+    plt.show()
+    return
+
+
+@app.cell
+def _():
+    return
+
+
+@app.cell
+def _(learning_curve, plt, theme_colors):
+    plt.figure()
+    plt.xlabel("# data")
+    plt.ylabel("LOO error [in]")
+    plt.errorbar(
+        learning_curve["# data"], learning_curve["loo error [in]"], 
+        yerr=learning_curve["loo error std [in]"], marker="s"
+    )
+    plt.hlines([4.590],xmin=0,xmax=100, colors=theme_colors[1], linestyles="--", label="LSE Localization")
+    plt.hlines([14.928],xmin=0,xmax=100, colors= theme_colors[2], linestyles="--", label="Naive Triangulation")
+    #plt.title("learning curve")
+    plt.ylim(ymin=0)
+    plt.legend(loc="center right", bbox_to_anchor=(1,0.65))
+    plt.savefig("learning_curve.pdf", format="pdf", bbox_inches='tight')
     plt.show()
     return
 
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""# 🥔 delta learning.""")
+    mo.md(r"""
+    # 🥔 delta learning.
+    """)
     return
 
 
@@ -1867,7 +1961,9 @@ def _(data_delta_loo, np, plt):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""# 🚓 tracking""")
+    mo.md(r"""
+    # 🚓 tracking
+    """)
     return
 
 
@@ -1947,7 +2043,7 @@ def _(
             markeredgecolor=thing_to_color["true source loc"],
             marker="o",
             linestyle="--",
-            label="true path"
+            label="true\npath"
         )
 
         plt.plot(
@@ -1959,13 +2055,13 @@ def _(
             markeredgecolor=thing_to_color["pred source loc"],
             marker="o",
             linestyle="--",
-            label="predicted path"
+            label="predicted\npath"
         )
 
         viz_sensor_locs(ax)
 
         handles, labels = plt.gca().get_legend_handles_labels()
-        plt.legend(handles[-3:], labels[-3:], loc=(0.6, 0.325), fontsize=10)
+        plt.legend(handles[-3:], labels[-3:], bbox_to_anchor=(1.3, 0.5), loc='upper left', borderaxespad=0)
 
         plt.show()
     return (viz_track,)
