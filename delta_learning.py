@@ -357,7 +357,7 @@ def _(
     thing_to_color,
     viz_sensor_locs,
 ):
-    def viz_source_locs(data, ids=None, title=""):
+    def viz_source_locs(data, ids=None, title="", savename=""):
         if ids is None:
             ids = range(data.shape[0])
 
@@ -388,17 +388,12 @@ def _(
         handles, labels = plt.gca().get_legend_handles_labels()
         by_label = dict(zip(labels, handles))
         plt.legend(by_label.values(), by_label.keys(), bbox_to_anchor=(1.05, 0.8), loc='upper left', borderaxespad=0)
-        plt.savefig("source_locs.pdf", format="pdf", bbox_inches='tight')
+        if not savename == "":
+            plt.savefig(savename, format="pdf", bbox_inches='tight')
         plt.show()
 
-    viz_source_locs(data)
+    viz_source_locs(data, savename="source_locs.pdf")
     return (viz_source_locs,)
-
-
-@app.cell
-def _(data, viz_source_locs):
-    viz_source_locs(data)
-    return
 
 
 @app.cell(hide_code=True)
@@ -640,7 +635,7 @@ def _(data, viz_sensor_readout):
 
 @app.cell
 def _(data, viz_source_locs):
-    viz_source_locs(data, ids=[1, 40, 41, 57, 63]) #title="false negatives")
+    viz_source_locs(data, ids=[1, 40, 41, 57, 63], savename="false_negatives.pdf") #title="false negatives")
     return
 
 
@@ -1648,7 +1643,7 @@ def _(mo):
 
 @app.cell
 def _(np):
-    def response_fun(d, S, e_ip, a, b):
+    def response_fun(d, S, a, b):
         #a = 14
         #b = 28
         alpha = a / (2 * d)
@@ -1663,7 +1658,7 @@ def _(np):
 def _(np, optimize, output_distance_data, response_fun):
     fit_results = optimize.curve_fit(
         response_fun, output_distance_data["distance [in]"], output_distance_data["detector output"], 
-        bounds=(0, np.inf), p0=[15.984e+6, 0.3, 14, 28]
+        bounds=(0, np.inf), p0=[15.984e+6, 14, 28]
     )
     opt_params = fit_results[0]
     return (opt_params,)
@@ -1673,18 +1668,27 @@ def _(np, optimize, output_distance_data, response_fun):
 def _(np, opt_params, output_distance_data, plt, response_fun):
     plt.figure()
     plt.xlabel("distance [in]")
-    plt.ylabel("detector output")
+    plt.ylabel("sensor readout [CPS]")
     plt.scatter(
         output_distance_data["distance [in]"],
         output_distance_data["detector output"], 
         label="data"
     )
+    plt.xlim(xmin=0)
+    plt.ylim(ymin=0)
     ds = np.linspace(0.1, 25.0)
     plt.ylim(ymax=output_distance_data["detector output"].max() * 1.02)
     plt.plot(
         ds, [response_fun(d, *opt_params) for d in ds], label="model fit"
     )
+    plt.savefig("readout_vs_distance.pdf", format="pdf", bbox_inches="tight")
     plt.legend()
+    return
+
+
+@app.cell
+def _(output_distance_data):
+    output_distance_data["distance [in]"].max()
     return
 
 
@@ -2002,11 +2006,11 @@ def _(
     all_errors = pd.merge(
         pd.merge(
         pd.merge(
-            data_loo["error"].rename("tree\nensemble"), 
-            data_trad["error"].rename("trad\nlocalization"), 
+            data_loo["error"].rename("ERT\nensemble"), 
+            data_trad["error"].rename("multilateration"), 
             left_index=True, right_index=True
         ),
-        data_triangulation["error"].rename("naive\ntriangulation"),
+        data_triangulation["error"].rename("weighted centroid"),
         left_index=True, right_index=True
         ),
         data_rand["error"].rename("random guessing"),
@@ -2019,12 +2023,18 @@ def _(
 
 
 @app.cell
+def _(all_errors):
+    all_errors.rename
+    return
+
+
+@app.cell
 def _(all_errors, plt, pt, sns):
     # see https://github.com/pog87/PtitPrince/blob/master/tutorial_python/raincloud_tutorial_python.ipynb
     _f, _ax = plt.subplots(figsize=(7, 5))
     pt.RainCloud(
         x="method", data=all_errors.rename(columns={"error": "absolute error [in]"}), 
-        y="absolute error [in]", hue="method", bw=0.25, ax=_ax, orient="h", palette=sns.color_palette("Set2")[:3]#, cut=2
+        y="absolute error [in]", hue="method", bw=0.25, ax=_ax, orient="h", palette=sns.color_palette("Set2")[:4]#, cut=2
     )
     _ax.set_xlim(xmin=0.0)
     for i, method in enumerate(all_errors["method"].unique()):
@@ -2042,21 +2052,31 @@ def _(all_errors, plt, pt, sns):
 
 
 @app.cell
-def _(learning_curve, plt, theme_colors):
+def _(data_rand, learning_curve, plt, theme_colors):
     plt.figure()
     plt.xlabel("# training examples")
-    plt.ylabel("LOOCV error in predicted\nsource location [in]")
+    plt.ylabel("mean error [in]")
     plt.errorbar(
         learning_curve["# data"], learning_curve["loo error [in]"], 
-        yerr=learning_curve["loo error std [in]"], marker="s"
+        yerr=learning_curve["loo error std [in]"], marker="s", color=theme_colors[0]
     )
-    plt.hlines([4.590],xmin=0,xmax=100, colors=theme_colors[1], linestyles="--", label="LSE Localization")
-    plt.hlines([14.928],xmin=0,xmax=100, colors= theme_colors[2], linestyles="--", label="Naive Triangulation")
+    plt.axhline([4.590],color=theme_colors[1], linestyle="--", label="multilateration")
+    plt.axhline([14.928],color=theme_colors[2], linestyle="--", label="weighted centroid")
     #plt.title("learning curve")
+    plt.axhline(
+        data_rand["error"].mean(), color=theme_colors[3], clip_on=False, label="random guessing", linestyle="--"
+    )
     plt.ylim(ymin=0)
-    plt.legend(loc="center right", bbox_to_anchor=(1,0.65))
+    plt.xlim(xmin=0)
+    plt.legend(loc="center right", bbox_to_anchor=(1, 0.6), fontsize=14)
     plt.savefig("learning_curve.pdf", format="pdf", bbox_inches='tight')
     plt.show()
+    return
+
+
+@app.cell
+def _(data_rand):
+    data_rand["error"].mean()
     return
 
 
