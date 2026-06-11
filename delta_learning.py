@@ -14,6 +14,7 @@ def _():
     import marimo as mo
     import matplotlib.pyplot as plt
     import matplotlib.patches as patches
+    import matplotlib
     from matplotlib.patches import Ellipse
     import matplotlib.transforms as transforms
     import matplotlib.font_manager as fm
@@ -41,6 +42,7 @@ def _():
         average_precision_score,
         csv,
         differential_evolution,
+        matplotlib,
         mo,
         np,
         optimize,
@@ -666,14 +668,68 @@ def _(data, plt, sensor_to_nice_int, sensors, sns, theme_colors):
 
 
 @app.cell
-def _(data, np, plt, sensor_to_nice_int, sensors, sns):
-    _bins = np.geomspace(data[sensors].min().min(), data[sensors].max().max(), 30)
-    _g = sns.pairplot(data[sensors].rename(columns=sensor_to_nice_int), corner=True, diag_kws={'bins': _bins})
-    for _ax in _g.axes.flat:
-        if not _ax == None:
-            _ax.set_xscale('log')
-            _ax.set_yscale('log')
-    plt.show()
+def _(matplotlib):
+    matplotlib.cm.get_cmap("coolwarm")
+    return
+
+
+@app.cell
+def _(data, np, sensors):
+    max_val = np.ceil(data[sensors].corr().abs().values[~np.eye(data[sensors].corr().abs().shape[0], dtype=bool)].max() * 10) / 10
+    max_val
+    return
+
+
+@app.cell
+def _(data, matplotlib, np, plt, sensor_to_nice_int, sensors, sns):
+    def viz_all_data(data):
+        bins = np.geomspace(data[sensors].min().min(), data[sensors].max().max(), 30)
+        with sns.plotting_context("talk", font_scale=1.2):
+            g = sns.pairplot(
+                data[sensors].rename(columns=sensor_to_nice_int), 
+                corner=True, 
+                plot_kws={
+                    'color': 'black',       # Makes the inside of the dots black
+                    'edgecolor': 'white',   # Adds the white outline
+                },
+                diag_kws={'bins': bins, 'color': "black"}
+            )
+    
+        g.figure.text(0.5, -0.01, 'sensor', ha='center', va='bottom', fontsize=25)
+        g.figure.text(-0.01, 0.5, 'sensor', ha='left', va='center', rotation='vertical', fontsize=25)
+            
+        corr_matrix = data[sensors].corr()
+        max_corr = np.ceil(corr_matrix.abs().values[~np.eye(corr_matrix.abs().shape[0], dtype=bool)].max() * 10) / 10
+        cmap = matplotlib.cm.get_cmap("coolwarm")
+        norm = matplotlib.colors.Normalize(vmin=-max_corr, vmax=max_corr) # Correlation bounds
+        for i, sensor_i in enumerate(sensors):
+            for j, sensor_j in enumerate(sensors):
+                ax = g.axes[i, j]
+            
+                if ax is not None:    
+                    ax.set_xscale('log')
+                    ax.set_yscale('log')
+                    # Color off-diagonal panel backgrounds by correlation
+                    if i > j: 
+                        corr_val = corr_matrix.loc[sensor_i, sensor_j]
+                        rgba_color = cmap(norm(corr_val))
+                    
+                        # Set background color (with slight alpha transparency so data points stay visible)
+                        ax.set_facecolor(rgba_color[:3])
+
+        sm = matplotlib.cm.ScalarMappable(cmap=cmap, norm=norm)
+        sm.set_array([])
+    
+        # Create an axis for the colorbar on the upper right (where the corner plot is empty)
+        # coordinates: [left, bottom, width, height] relative to figure
+        cax = g.figure.add_axes([0.85, 0.35, 0.03, 0.2]) 
+        cbar = g.figure.colorbar(sm, cax=cax, orientation='vertical')
+        cbar.set_label('correlation')
+    
+        plt.show()
+    
+
+    viz_all_data(data)
     return
 
 
