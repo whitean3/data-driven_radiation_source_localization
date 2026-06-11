@@ -19,6 +19,7 @@ def _():
     import matplotlib.font_manager as fm
     from scipy.optimize import root_scalar, minimize, differential_evolution
     from sklearn.metrics import ConfusionMatrixDisplay
+    from sklearn.metrics import RocCurveDisplay
     import scipy.optimize as optimize
     import matplotlib as mpl
     import seaborn as sns
@@ -882,6 +883,7 @@ def _(box_dims, data_loo, plt):
         for ax in [ax1, ax2]:
             ax.set_aspect("equal", share=True)
 
+
         ax1.set_xlim(0, box_dims[0])
         ax1.set_ylim(0, box_dims[0])
         ax2.set_xlim(0, box_dims[1])
@@ -892,27 +894,27 @@ def _(box_dims, data_loo, plt):
         ax2.set_xticks([0, 5, 10, 15, 20, 25, 30])
         ax2.set_yticks([0, 5, 10, 15, 20, 25, 30])
 
-        ax1.set_xlabel("x$_s$ [in]")
-        ax2.set_xlabel("y$_s$ [in]")
+        ax1.set_xlabel("True x$_s$ [in]")
+        ax2.set_xlabel("True y$_s$ [in]")
         ax1.set_ylabel("predicted x$_s$ [in]")
         ax2.set_ylabel("predicted y$_s$ [in]")
 
-        ax1.plot([0, box_dims[0]], [0, box_dims[0]], color="black", linestyle="--")
-        ax2.plot([0, box_dims[1]], [0, box_dims[1]], color="black", linestyle="--")
+        ax1.plot([0, box_dims[0]], [0, box_dims[0]], color="black", linestyle="--", clip_on=False)
+        ax2.plot([0, box_dims[1]], [0, box_dims[1]], color="black", linestyle="--", clip_on=False)
 
-        ax1.scatter(data["x_s"], data["x_s_pred"])  # removed clip_on=False
-        ax2.scatter(data["y_s"], data["y_s_pred"])  # removed clip_on=False
+        ax1.scatter(data["x_s"], data["x_s_pred"], clip_on=False)  # removed clip_on=False
+        ax2.scatter(data["y_s"], data["y_s_pred"], clip_on=False)  # removed clip_on=False
 
         x_err = data["error_x"].mean()
         y_err = data["error_y"].mean()
         ax1.legend(title=f"error = {x_err:.2f} in", loc='upper left')
         ax2.legend(title=f"error = {y_err:.2f} in", loc='upper left')
-
+    
         plt.savefig("XY_reg_parity.pdf", format="pdf", bbox_inches='tight')
         plt.show()
 
     xy_parity_plot(data_loo)
-    return (xy_parity_plot,)
+    return
 
 
 @app.cell
@@ -1056,6 +1058,7 @@ def _(
         xs_preds = np.array([xs[0] for xs in data_loo.loc[exp, "ensemble pred source locs"]])
         ys_preds = np.array([xs[1] for xs in data_loo.loc[exp, "ensemble pred source locs"]])
         if n_samples > 0:
+            """
             # plot samples of predicted responses
             ids_trees = np.random.choice(np.arange(len(xs_preds)), n_samples)
             plt.scatter(
@@ -1065,7 +1068,7 @@ def _(
                 s=65,
                 label="predicted\nsource\nlocation\nsample", clip_on=False
             )
-
+            """
         if incl_ellipse:
             draw_confidence_ellipse(xs_preds, ys_preds, ax, facecolor=thing_to_color["pred source loc"], alpha=0.2)
             draw_confidence_ellipse(xs_preds, ys_preds, ax, n_std=2.0, facecolor=thing_to_color["pred source loc"], alpha=0.2)
@@ -1082,9 +1085,14 @@ def _(
         plt.legend(handles[-3:], labels[-3:], bbox_to_anchor=(1.3, 0.5), loc='upper left', borderaxespad=0)
         plt.savefig("conf_ellipse.pdf", format="pdf", bbox_inches='tight')
         plt.show()
-        #plt.savefig("conf_ellipse.pdf", format="pdf")
+
     _exp = 30
     viz_prediction(data_loo, _exp, n_samples=25)
+    return
+
+
+@app.cell
+def _():
     return
 
 
@@ -1212,8 +1220,8 @@ def _(data, do_loo_cv, np, pd, run_learning_curve):
 def _(learning_curve, plt, run_learning_curve):
     if run_learning_curve.value:
         plt.figure()
-        plt.xlabel("# data")
-        plt.ylabel("LOO error [in]")
+        plt.xlabel("# training examples")
+        plt.ylabel("LOOCV error in predicted\n source location [in]")
         plt.errorbar(
             learning_curve["# data"], learning_curve["loo error [in]"], 
             yerr=learning_curve["loo error std [in]"], marker="s"
@@ -1317,7 +1325,7 @@ def _(ExtraTreesClassifier, LeaveOneOut, np, sensors):
         # store prediction of whether or not a source in the data frame.
         #  ok bc each data point is test point ONCE.
         data_loo["pred_safe"] = np.zeros((len(data_c)))
-
+        data_loo["score"] = np.zeros((len(data_c)))
         loo = LeaveOneOut()
         for i, (_train_index, _test_index) in enumerate(loo.split(data_loo)):
             # account for index missing after remove NaN
@@ -1347,10 +1355,10 @@ def _(ExtraTreesClassifier, LeaveOneOut, np, sensors):
                 print("\t\ttesting the tree ensemble.")
             sensor_network_readout_test = data_loo.loc[test_index, sensors]
             safety_pred = tree_ensemble.predict(sensor_network_readout_test)[0]
-
+            prob = tree_ensemble.predict_proba(sensor_network_readout_test)[0][1]
             # store prediction on test network readout.
             data_loo.loc[test_index, "pred_safe"] = safety_pred
-
+            data_loo.loc[test_index, "score"] = prob
         data_loo["agreement"] = data_loo["background"] == data_loo["pred_safe"]
 
         return data_loo
@@ -1388,6 +1396,49 @@ def _(ConfusionMatrixDisplay, data_loo_c, plt):
     cm.im_.colorbar.set_label('# instances', fontsize=18)
     plt.savefig("confusion_matrix.pdf", format="pdf", bbox_inches='tight')
     plt.show()
+    return
+
+
+@app.cell
+def _(data_loo_c):
+    data_loo_c
+    return
+
+
+@app.cell
+def _(data_loo_c, plt):
+    def _():
+        from sklearn.metrics import roc_curve, auc
+    
+        # Assuming you have:
+        # clf  - your trained ExtraTreesClassifier
+        # X    - your feature matrix
+        # y    - your binary labels
+    
+        y_true = data_loo_c["pred_safe"].values
+        y_scores = data_loo_c["score"].values
+    
+    
+        # Compute ROC curve and AUC
+        fpr, tpr, thresholds = roc_curve(y_true, y_scores, pos_label="source present")
+        roc_auc = auc(fpr, tpr)
+    
+        # Plot
+        plt.figure(figsize=(8, 6))
+        plt.plot(fpr, tpr, lw=2,
+                 label=f'ROC curve (AUC = {roc_auc:.2f})')
+        plt.plot([0, 1], [0, 1], lw=2, linestyle='--', label='Random classifier')
+        plt.xlim([0.0, 1.0])
+        plt.ylim([0.0, 1.05])
+        plt.xlabel('False Positive Rate')
+        plt.ylabel('True Positive Rate')
+        plt.title('ROC Curve — ExtraTreesClassifier (LOOCV)')
+        plt.legend(loc='lower right')
+        plt.tight_layout()
+        plt.show()
+
+
+    _()
     return
 
 
@@ -1808,14 +1859,32 @@ def _(mo):
 
 
 @app.cell
+def _(calculate_errors, data_loo, np):
+    data_rand = data_loo.copy()
+    data_rand["x_s_pred"] = [np.random.uniform(42) for i in range(len(data_rand))]
+    data_rand["y_s_pred"] = [np.random.uniform(33) for i in range(len(data_rand))]
+    calculate_errors(data_rand)
+    data_rand
+    return (data_rand,)
+
+
+@app.cell
 def _(data, ids_wrong):
     expts_to_compare = [exp for exp in range(data.shape[0]) if not exp in ids_wrong]
     return (expts_to_compare,)
 
 
 @app.cell
-def _(data_loo, data_trad, data_triangulation, expts_to_compare, pd):
+def _(
+    data_loo,
+    data_rand,
+    data_trad,
+    data_triangulation,
+    expts_to_compare,
+    pd,
+):
     all_errors = pd.merge(
+        pd.merge(
         pd.merge(
             data_loo["error"].rename("tree\nensemble"), 
             data_trad["error"].rename("trad\nlocalization"), 
@@ -1823,6 +1892,9 @@ def _(data_loo, data_trad, data_triangulation, expts_to_compare, pd):
         ),
         data_triangulation["error"].rename("naive\ntriangulation"),
         left_index=True, right_index=True
+        ),
+        data_rand["error"].rename("random guessing"),
+            left_index=True, right_index=True
     )
     all_errors = all_errors.loc[expts_to_compare, :]
     all_errors = all_errors.melt(var_name='method', value_name='error')
@@ -1854,15 +1926,10 @@ def _(all_errors, plt, pt, sns):
 
 
 @app.cell
-def _():
-    return
-
-
-@app.cell
 def _(learning_curve, plt, theme_colors):
     plt.figure()
-    plt.xlabel("# data")
-    plt.ylabel("LOO error [in]")
+    plt.xlabel("# training examples")
+    plt.ylabel("LOOCV error in predicted\nsource location [in]")
     plt.errorbar(
         learning_curve["# data"], learning_curve["loo error [in]"], 
         yerr=learning_curve["loo error std [in]"], marker="s"
@@ -1916,8 +1983,8 @@ def _(data_delta, do_loo_cv, don_run_loo_cv):
 
 
 @app.cell
-def _(data_delta_loo, xy_parity_plot):
-    xy_parity_plot(data_delta_loo)
+def _():
+    # xy_parity_plot(data_delta_loo)
     return
 
 
@@ -2061,8 +2128,8 @@ def _(
         viz_sensor_locs(ax)
 
         handles, labels = plt.gca().get_legend_handles_labels()
-        plt.legend(handles[-3:], labels[-3:], bbox_to_anchor=(1.3, 0.5), loc='upper left', borderaxespad=0)
-
+        plt.legend(handles[-3:], labels[-3:], bbox_to_anchor=(1.05, 0.65), loc='upper left', borderaxespad=0)
+        plt.savefig("tracking_viz.pdf", format="pdf", bbox_inches='tight')
         plt.show()
     return (viz_track,)
 
