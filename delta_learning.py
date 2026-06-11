@@ -766,6 +766,7 @@ def _(data, data_bkg, matplotlib, np, plt, sensor_to_nice_int, sensors, sns):
         cax = g.figure.add_axes([0.85, 0.35, 0.03, 0.2]) 
         cbar = g.figure.colorbar(sm, cax=cax, orientation='vertical')
         cbar.set_label('correlation')
+        plt.savefig("all_data.pdf", bbox_inches="tight", format="pdf")
     
         plt.show()
     
