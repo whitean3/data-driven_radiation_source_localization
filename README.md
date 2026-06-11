@@ -1,10 +1,10 @@
 # table-top radiation source detection and localization
 
-we have a complex table-top environment and a network of radiation sensors within it.
-we consider three prediction tasks on the sensor network readout:
-* detect if the source is present (classification)
-* predict the location of the source (regression)
-* detect sensor tampering when a source is present (anomaly detection)
+this repo contains the data and code to reproduce the results and visualizations in:
+> A. White, C. Simon, H. Yang. "Environment-specific radiation source detection and localization via a sensor network and ensemble of randomized decision trees." (2026)
 
-## list of data
-* 
+## data
+
+## code
+
+see the marimo notebook to be run in Python.

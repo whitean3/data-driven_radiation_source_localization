@@ -1320,7 +1320,7 @@ def _(learning_curve, plt, run_learning_curve):
     if run_learning_curve.value:
         plt.figure()
         plt.xlabel("# training examples")
-        plt.ylabel("LOOCV error in predicted\n source location [in]")
+        plt.ylabel("error in predicted\nsource location [in]")
         plt.errorbar(
             learning_curve["# data"], learning_curve["loo error [in]"], 
             yerr=learning_curve["loo error std [in]"], marker="s"
