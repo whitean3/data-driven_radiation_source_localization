@@ -674,16 +674,24 @@ def _(matplotlib):
 
 
 @app.cell
-def _(data, np, sensors):
-    max_val = np.ceil(data[sensors].corr().abs().values[~np.eye(data[sensors].corr().abs().shape[0], dtype=bool)].max() * 10) / 10
-    max_val
+def _(data_bkg):
+    data_bkg
     return
 
 
 @app.cell
-def _(data, matplotlib, np, plt, sensor_to_nice_int, sensors, sns):
-    def viz_all_data(data):
-        bins = np.geomspace(data[sensors].min().min(), data[sensors].max().max(), 30)
+def _(data, data_bkg, matplotlib, np, plt, sensor_to_nice_int, sensors, sns):
+    def viz_all_data(data, data_bkg):
+        # for setting scales
+        all_min = min(data[sensors].min().min(), data_bkg[sensors].min().min())
+        all_max = max(data[sensors].max().max(), data_bkg[sensors].max().max())
+    
+        # Pad the limits slightly so data points near the edges aren't cut in half
+        # For log scales, multiplying/dividing by a small factor acts as padding
+        padded_min = all_min * 0.9
+        padded_max = all_max * 1.1
+    
+        bins = np.geomspace(padded_min, padded_max, 30)
         with sns.plotting_context("talk", font_scale=1.2):
             g = sns.pairplot(
                 data[sensors].rename(columns=sensor_to_nice_int), 
@@ -692,7 +700,7 @@ def _(data, matplotlib, np, plt, sensor_to_nice_int, sensors, sns):
                     'color': 'black',       # Makes the inside of the dots black
                     'edgecolor': 'white',   # Adds the white outline
                 },
-                diag_kws={'bins': bins, 'color': "black"}
+                diag_kws={'bins': bins, 'color': "black", 'alpha': 0.7}
             )
     
         g.figure.text(0.5, -0.01, 'sensor', ha='center', va='bottom', fontsize=25)
@@ -709,6 +717,11 @@ def _(data, matplotlib, np, plt, sensor_to_nice_int, sensors, sns):
                 if ax is not None:    
                     ax.set_xscale('log')
                     ax.set_yscale('log')
+                
+                    ax.set_xlim(padded_min, padded_max)
+                    if i != j:  # Only set Y limits on the off-diagonal scatter plots
+                        ax.set_ylim(padded_min, padded_max)
+                    
                     # Color off-diagonal panel backgrounds by correlation
                     if i > j: 
                         corr_val = corr_matrix.loc[sensor_i, sensor_j]
@@ -717,8 +730,36 @@ def _(data, matplotlib, np, plt, sensor_to_nice_int, sensors, sns):
                         # Set background color (with slight alpha transparency so data points stay visible)
                         ax.set_facecolor(rgba_color[:3])
 
+                    # plut background
+                    if i == j:
+                        # Overlay background histogram on the diagonal
+                        ax.hist(data_bkg[sensor_i], bins=bins, color='forestgreen', density=False, alpha=0.7)
+                    else:
+                        # Overlay background scatter points off-diagonal
+                        ax.scatter(
+                            data_bkg[sensor_j], data_bkg[sensor_i], color='forestgreen', s=25, zorder=2, marker="+"
+                        )
+
         sm = matplotlib.cm.ScalarMappable(cmap=cmap, norm=norm)
         sm.set_array([])
+
+        primary_handle = matplotlib.lines.Line2D([], [], color='black', marker='o', markeredgecolor='white', 
+                                       markersize=10, linestyle='None', label='source present')
+    
+        bkg_handle = matplotlib.lines.Line2D([], [], color='forestgreen', marker='+', 
+                                   markersize=10, linestyle='None', label='source absent')
+
+        # --- 3. Draw the Legend on the Figure ---
+        # We place it slightly higher than the colorbar (e.g., bottom at 0.60) in the empty space
+        g.figure.legend(
+            handles=[primary_handle, bkg_handle],
+            loc='lower left', 
+            bbox_to_anchor=(0.65, 0.4),  # Anchors it right above the colorbar
+            frameon=True,
+            # facecolor='white',
+            # edgecolor='none',
+            # fontsize=12
+        )
     
         # Create an axis for the colorbar on the upper right (where the corner plot is empty)
         # coordinates: [left, bottom, width, height] relative to figure
@@ -729,7 +770,7 @@ def _(data, matplotlib, np, plt, sensor_to_nice_int, sensors, sns):
         plt.show()
     
 
-    viz_all_data(data)
+    viz_all_data(data, data_bkg)
     return
 
 
