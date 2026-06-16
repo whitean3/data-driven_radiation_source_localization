@@ -256,10 +256,16 @@ def _(mo):
 @app.cell
 def _(detector_outputs, n_sensors):
     sensors = detector_outputs[0]["SN"].unique()
-    sensor_to_nice_int = dict(zip(sensors, range(len(sensors))))
+    sensor_to_nice_int = dict(zip(sensors, range(1,len(sensors)+1)))
     assert len(sensors) == n_sensors
     sensors
     return sensor_to_nice_int, sensors
+
+
+@app.cell
+def _(sensor_to_nice_int):
+    sensor_to_nice_int
+    return
 
 
 @app.cell(hide_code=True)
@@ -680,12 +686,12 @@ def _(data, data_bkg, matplotlib, np, plt, sensor_to_nice_int, sensors, sns):
         # for setting scales
         all_min = min(data[sensors].min().min(), data_bkg[sensors].min().min())
         all_max = max(data[sensors].max().max(), data_bkg[sensors].max().max())
-    
+
         # Pad the limits slightly so data points near the edges aren't cut in half
         # For log scales, multiplying/dividing by a small factor acts as padding
         padded_min = all_min * 0.9
         padded_max = all_max * 1.1
-    
+
         bins = np.geomspace(padded_min, padded_max, 30)
         with sns.plotting_context("talk", font_scale=1.2):
             g = sns.pairplot(
@@ -697,10 +703,10 @@ def _(data, data_bkg, matplotlib, np, plt, sensor_to_nice_int, sensors, sns):
                 },
                 diag_kws={'bins': bins, 'color': "black", 'alpha': 0.7}
             )
-    
+
         g.figure.text(0.5, -0.01, 'sensor', ha='center', va='bottom', fontsize=25)
         g.figure.text(-0.01, 0.5, 'sensor', ha='left', va='center', rotation='vertical', fontsize=25)
-            
+
         corr_matrix = data[sensors].corr()
         max_corr = np.ceil(corr_matrix.abs().values[~np.eye(corr_matrix.abs().shape[0], dtype=bool)].max() * 10) / 10
         cmap = matplotlib.cm.get_cmap("coolwarm")
@@ -708,20 +714,20 @@ def _(data, data_bkg, matplotlib, np, plt, sensor_to_nice_int, sensors, sns):
         for i, sensor_i in enumerate(sensors):
             for j, sensor_j in enumerate(sensors):
                 ax = g.axes[i, j]
-            
+
                 if ax is not None:    
                     ax.set_xscale('log')
                     ax.set_yscale('log')
-                
+
                     ax.set_xlim(padded_min, padded_max)
                     if i != j:  # Only set Y limits on the off-diagonal scatter plots
                         ax.set_ylim(padded_min, padded_max)
-                    
+
                     # Color off-diagonal panel backgrounds by correlation
                     if i > j: 
                         corr_val = corr_matrix.loc[sensor_i, sensor_j]
                         rgba_color = cmap(norm(corr_val))
-                    
+
                         # Set background color (with slight alpha transparency so data points stay visible)
                         ax.set_facecolor(rgba_color[:3])
 
@@ -740,7 +746,7 @@ def _(data, data_bkg, matplotlib, np, plt, sensor_to_nice_int, sensors, sns):
 
         primary_handle = matplotlib.lines.Line2D([], [], color='black', marker='o', markeredgecolor='white', 
                                        markersize=10, linestyle='None', label='source present')
-    
+
         bkg_handle = matplotlib.lines.Line2D([], [], color='forestgreen', marker='+', 
                                    markersize=10, linestyle='None', label='source absent')
 
@@ -749,22 +755,22 @@ def _(data, data_bkg, matplotlib, np, plt, sensor_to_nice_int, sensors, sns):
         g.figure.legend(
             handles=[primary_handle, bkg_handle],
             loc='lower left', 
-            bbox_to_anchor=(0.65, 0.4),  # Anchors it right above the colorbar
+            bbox_to_anchor=(0.63, 0.4),  # Anchors it right above the colorbar
             frameon=True,
             # facecolor='white',
             # edgecolor='none',
-            # fontsize=12
+             fontsize=24
         )
-    
+
         # Create an axis for the colorbar on the upper right (where the corner plot is empty)
         # coordinates: [left, bottom, width, height] relative to figure
         cax = g.figure.add_axes([0.85, 0.35, 0.03, 0.2]) 
         cbar = g.figure.colorbar(sm, cax=cax, orientation='vertical')
-        cbar.set_label('correlation')
+        cbar.set_label('correlation', size=20)
         plt.savefig("all_data.pdf", bbox_inches="tight", format="pdf")
-    
+
         plt.show()
-    
+
 
     viz_all_data(data, data_bkg)
     return
@@ -1459,7 +1465,7 @@ def _(ExtraTreesClassifier, LeaveOneOut, np, sensors):
     return (do_loo_cv_classification,)
 
 
-@app.cell
+@app.cell(disabled=True)
 def _(data_c, do_loo_cv_classification):
     data_loo_c = do_loo_cv_classification(data_c)
     data_loo_c
@@ -1517,7 +1523,7 @@ def _(
     def draw_roc(data_loo_c):
         y_true = data_loo_c["background"].values
         y_scores = data_loo_c["score"].values
-    
+
         # ROC
         fpr, tpr, thresholds = roc_curve(y_true, y_scores, pos_label="source present")
         roc_auc = auc(fpr, tpr)
@@ -2223,6 +2229,8 @@ def _(
     box_dims,
     draw_obstacles,
     plt,
+    sensor_to_nice_int,
+    sensors,
     setup_environment,
     thing_to_color,
     viz_sensor_locs,
@@ -2256,7 +2264,15 @@ def _(
             linestyle="--",
             label="predicted\npath"
         )
-
+        for sensor in sensors:
+            plt.annotate(
+                f"{sensor_to_nice_int[sensor]}",
+                (sensor_to_loc[sensor][0], sensor_to_loc[sensor][1]),
+                xytext=(5, 5),
+                textcoords="offset points", 
+                ha='left',
+                va='bottom'
+            )
         viz_sensor_locs(ax)
 
         handles, labels = plt.gca().get_legend_handles_labels()
