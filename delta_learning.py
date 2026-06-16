@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.14.9"
+__generated_with = "0.17.7"
 app = marimo.App(width="medium")
 
 
@@ -84,8 +84,7 @@ def _(sns):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(
-        r"""
+    mo.md(r"""
     # ::icon-park:data:: read in sensor network response data
 
     * each data set is the sensor network response to a source in a particular location.
@@ -94,8 +93,7 @@ def _(mo):
     * the list of source locations are below.
 
     ## locations of detectors in the environment
-    """
-    )
+    """)
     return
 
 
@@ -138,8 +136,7 @@ def _(box_dims, n_sensors, np):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(
-        r"""
+    mo.md(r"""
     ## locations of the radioactive source placed in the environment
 
     the first 25 rows come from Latin Hypercube sampling.
@@ -147,8 +144,7 @@ def _(mo):
     the next 25 rows are manually-selected on the corners/boundary.
 
     the remaining 25 are from another round of Latin Hypercube sampling.
-    """
-    )
+    """)
     return
 
 
@@ -167,7 +163,9 @@ def _(box_dims, pd):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""## read in sensor responses""")
+    mo.md(r"""
+    ## read in sensor responses
+    """)
     return
 
 
@@ -241,15 +239,13 @@ def _(detector_outputs):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(
-        r"""
+    mo.md(r"""
     ## re-work data into an ML-friendly format
 
     ::lucide:lightbulb:: source locations paired with sensor network response vectors
 
     first, get list of sensors in the network.
-    """
-    )
+    """)
     return
 
 
@@ -270,7 +266,9 @@ def _(sensor_to_nice_int):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""next, from a sensor network response data frame, extract the count rate of a particular sensor.""")
+    mo.md(r"""
+    next, from a sensor network response data frame, extract the count rate of a particular sensor.
+    """)
     return
 
 
@@ -288,14 +286,12 @@ def _(detector_outputs, np, sensors):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(
-        r"""
+    mo.md(r"""
     🎯 goal:
 
     * each row is an experiment where we place the source at a location and observe the sensor network response
     * the row lists the source location paired with the sensor response vector.
-    """
-    )
+    """)
     return
 
 
@@ -324,13 +320,11 @@ def _(data, np, sensors):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(
-        r"""
+    mo.md(r"""
     ## ::lucide:sailboat:: visually explore the data
 
     first, where are the source locations over all experiments?
-    """
-    )
+    """)
     return
 
 
@@ -404,7 +398,9 @@ def _(
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""second, visualize the sensor readout and source location for a single experiment.""")
+    mo.md(r"""
+    second, visualize the sensor readout and source location for a single experiment.
+    """)
     return
 
 
@@ -653,7 +649,9 @@ def _(data, viz_source_locs):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""the distribution of the detector responses over all experiments and correlations between them. use a log scale.""")
+    mo.md(r"""
+    the distribution of the detector responses over all experiments and correlations between them. use a log scale.
+    """)
     return
 
 
@@ -693,7 +691,7 @@ def _(data, data_bkg, matplotlib, np, plt, sensor_to_nice_int, sensors, sns):
         padded_max = all_max * 1.1
 
         bins = np.geomspace(padded_min, padded_max, 30)
-        with sns.plotting_context("talk", font_scale=1.2):
+        with sns.plotting_context("talk", font_scale=1.6):
             g = sns.pairplot(
                 data[sensors].rename(columns=sensor_to_nice_int), 
                 corner=True, 
@@ -704,8 +702,8 @@ def _(data, data_bkg, matplotlib, np, plt, sensor_to_nice_int, sensors, sns):
                 diag_kws={'bins': bins, 'color': "black", 'alpha': 0.7}
             )
 
-        g.figure.text(0.5, -0.01, 'sensor', ha='center', va='bottom', fontsize=25)
-        g.figure.text(-0.01, 0.5, 'sensor', ha='left', va='center', rotation='vertical', fontsize=25)
+        g.figure.text(0.5, -0.01, 'sensor', ha='center', va='bottom', fontsize=30)
+        g.figure.text(-0.01, 0.5, 'sensor', ha='left', va='center', rotation='vertical', fontsize=30)
 
         corr_matrix = data[sensors].corr()
         max_corr = np.ceil(corr_matrix.abs().values[~np.eye(corr_matrix.abs().shape[0], dtype=bool)].max() * 10) / 10
@@ -755,18 +753,19 @@ def _(data, data_bkg, matplotlib, np, plt, sensor_to_nice_int, sensors, sns):
         g.figure.legend(
             handles=[primary_handle, bkg_handle],
             loc='lower left', 
-            bbox_to_anchor=(0.63, 0.4),  # Anchors it right above the colorbar
+            bbox_to_anchor=(0.58, 0.5),  # Anchors it right above the colorbar
             frameon=True,
             # facecolor='white',
             # edgecolor='none',
-             fontsize=24
+             fontsize=30
         )
 
         # Create an axis for the colorbar on the upper right (where the corner plot is empty)
         # coordinates: [left, bottom, width, height] relative to figure
-        cax = g.figure.add_axes([0.85, 0.35, 0.03, 0.2]) 
+        cax = g.figure.add_axes([0.85, 0.33, 0.03, 0.25]) 
         cbar = g.figure.colorbar(sm, cax=cax, orientation='vertical')
-        cbar.set_label('correlation', size=20)
+        cbar.set_label('correlation', size=30)
+        cbar.ax.tick_params(labelsize=28) 
         plt.savefig("all_data.pdf", bbox_inches="tight", format="pdf")
 
         plt.show()
@@ -804,8 +803,7 @@ def _(data, np, plt, sensor_to_nice_int, sensors, sns):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(
-        r"""
+    mo.md(r"""
     # ☢️ source location predictor
 
     ML task: predict source location from sensor network response
@@ -816,8 +814,7 @@ def _(mo):
     **output**: 2D source location
 
     ## leave-one-out cross validation
-    """
-    )
+    """)
     return
 
 
@@ -949,7 +946,9 @@ def _(data, do_loo_cv, don_run_loo_cv):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""analyze error := norm of true source location vector minus predicted source location vector.""")
+    mo.md(r"""
+    analyze error := norm of true source location vector minus predicted source location vector.
+    """)
     return
 
 
@@ -974,7 +973,9 @@ def _(data_loo, plt):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""parity plot over cross-validation procedure.""")
+    mo.md(r"""
+    parity plot over cross-validation procedure.
+    """)
     return
 
 
@@ -1202,7 +1203,9 @@ def _():
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""### sensor importance""")
+    mo.md(r"""
+    ### sensor importance
+    """)
     return
 
 
@@ -1279,7 +1282,9 @@ def _(
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""## learning curve""")
+    mo.md(r"""
+    ## learning curve
+    """)
     return
 
 
@@ -1335,15 +1340,13 @@ def _(learning_curve, plt, run_learning_curve):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(
-        r"""
+    mo.md(r"""
     # ☢️ source presence classifier
 
     distinguish source presence from background.
 
     ##  background data
-    """
-    )
+    """)
     return
 
 
@@ -1404,7 +1407,9 @@ def _(data_bkg):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""classification. concatentate the background with non-background.""")
+    mo.md(r"""
+    classification. concatentate the background with non-background.
+    """)
     return
 
 
@@ -1465,7 +1470,7 @@ def _(ExtraTreesClassifier, LeaveOneOut, np, sensors):
     return (do_loo_cv_classification,)
 
 
-@app.cell(disabled=True)
+@app.cell
 def _(data_c, do_loo_cv_classification):
     data_loo_c = do_loo_cv_classification(data_c)
     data_loo_c
@@ -1569,7 +1574,9 @@ def _(
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""viz the ones we got wrong""")
+    mo.md(r"""
+    viz the ones we got wrong
+    """)
     return
 
 
@@ -1595,25 +1602,21 @@ def _(data_loo_c, disagreement_selector, viz_sensor_readout):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(
-        r"""
+    mo.md(r"""
     # ☢️ traditional least squares estimation of the source location
 
     first, calibrate a curve that gives sensor response to the source as a function of distance from the source.
-    """
-    )
+    """)
     return
 
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(
-        r"""
+    mo.md(r"""
     ## calibration curve
 
     output of sensor as a function of distance from source.
-    """
-    )
+    """)
     return
 
 
@@ -1643,7 +1646,9 @@ def _(np, pd):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""### fit detector response function to data""")
+    mo.md(r"""
+    ### fit detector response function to data
+    """)
     return
 
 
@@ -1700,13 +1705,11 @@ def _(output_distance_data):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(
-        r"""
+    mo.md(r"""
     ### retreive distance from detector output
 
     second, given a sensor's reading, predict the distance of the source from it. this puts a circle around the sensor.
-    """
-    )
+    """)
     return
 
 
@@ -1736,13 +1739,11 @@ def _(find_distance_to_detector, opt_params):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(
-        r"""
+    mo.md(r"""
     ## least squares estimator for location of source
 
     third, given the response of the sensor network, select the subset of sensors that come into play with a detectable response.
-    """
-    )
+    """)
     return
 
 
@@ -1769,7 +1770,9 @@ def _(data, select_responsive_sensors, sensors):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""some of the experiments led to no detectable response for ANY sensor. these are false negatives.""")
+    mo.md(r"""
+    some of the experiments led to no detectable response for ANY sensor. these are false negatives.
+    """)
     return
 
 
@@ -1782,7 +1785,9 @@ def _(data, select_responsive_sensors, sensors):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""when a SINGLE sensor in the network elicits a warning, we consider that a positive. but we need three for triangulation. so we select the top three sensors in terms of response from baseline.""")
+    mo.md(r"""
+    when a SINGLE sensor in the network elicits a warning, we consider that a positive. but we need three for triangulation. so we select the top three sensors in terms of response from baseline.
+    """)
     return
 
 
@@ -1804,7 +1809,9 @@ def _(data, select_top_three_sensors, sensors):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""finally, the traditional localization method that finds source location most consistent with the "measured" distance. here measured means we look at the response and infer the distance from the calibration curve. now we search for source location that is most consistent with those distances we measure.""")
+    mo.md(r"""
+    finally, the traditional localization method that finds source location most consistent with the "measured" distance. here measured means we look at the response and infer the distance from the calibration curve. now we search for source location that is most consistent with those distances we measure.
+    """)
     return
 
 
@@ -1879,7 +1886,9 @@ def _(
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""🥞 let's do it!""")
+    mo.md(r"""
+    🥞 let's do it!
+    """)
     return
 
 
@@ -1913,13 +1922,11 @@ def _(data_loo, data_trad):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(
-        r"""
+    mo.md(r"""
     ## ☢️ a sub-baseline: simple triangulation
 
     weighted average of significant sensor locations.
-    """
-    )
+    """)
     return
 
 
@@ -1953,7 +1960,9 @@ def _(calculate_errors, data, dumb_triangulation, opt_params, sensors):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""Vizualizes the source locations where no solution was able to be found b/c no significant sensors""")
+    mo.md(r"""
+    Vizualizes the source locations where no solution was able to be found b/c no significant sensors
+    """)
     return
 
 
@@ -1966,7 +1975,9 @@ def _(data, data_trad, np, viz_source_locs):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""...when the errors are huge.""")
+    mo.md(r"""
+    ...when the errors are huge.
+    """)
     return
 
 
@@ -1980,7 +1991,9 @@ def _(data, data_trad, viz_source_locs):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""## compare errors among methods""")
+    mo.md(r"""
+    ## compare errors among methods
+    """)
     return
 
 
@@ -2088,7 +2101,9 @@ def _(data_rand):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""# 🥔 delta learning.""")
+    mo.md(r"""
+    # 🥔 delta learning.
+    """)
     return
 
 
@@ -2168,7 +2183,9 @@ def _(data_delta_loo, np, plt):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""# 🚓 tracking""")
+    mo.md(r"""
+    # 🚓 tracking
+    """)
     return
 
 
