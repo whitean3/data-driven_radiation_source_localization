@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.17.7"
+__generated_with = "0.23.9"
 app = marimo.App(width="medium")
 
 
@@ -32,6 +32,7 @@ def _():
     plt.rcParams["font.size"] = 16
     from sklearn.ensemble import ExtraTreesClassifier, ExtraTreesRegressor, IsolationForest
     from sklearn.model_selection import LeaveOneOut, train_test_split
+
     return (
         ConfusionMatrixDisplay,
         Ellipse,
@@ -196,6 +197,7 @@ def _(csv, n_sensors, pd):
             df = df[start:]
 
             return df
+
     return (read_detector_outputs,)
 
 
@@ -342,6 +344,7 @@ def _(sensor_to_loc, sensors):
             marker="s",
             label="sensor"
         )
+
     return (viz_sensor_locs,)
 
 
@@ -420,6 +423,7 @@ def _(draw_obstacles, plt):
         plt.ylim(0, box_dims[1])
 
         return fig, ax
+
     return (setup_environment,)
 
 
@@ -505,6 +509,7 @@ def _(box_dims, patches, thing_to_color):
                 label=mat[r]
             )
             ax.add_patch(rectangle)
+
     return (draw_obstacles,)
 
 
@@ -550,6 +555,71 @@ def _(
         return plt.show()
 
     _()
+    return
+
+
+@app.cell
+def _(
+    box_dims,
+    patches,
+    plt,
+    sensor_to_loc,
+    sensor_to_nice_int,
+    sensors,
+    setup_environment,
+    theme_colors,
+):
+    from matplotlib.lines import Line2D
+    def _():
+        setup_environment(box_dims)
+    
+        for i, sensor in enumerate(sensors):
+            x, y = sensor_to_loc[sensor]
+            color = theme_colors[i % len(theme_colors)]
+        
+            circle = patches.Circle(
+                (x, y),
+                radius=20,
+                linestyle='dashed',
+                edgecolor=color,
+                facecolor='none',
+                linewidth=1.5
+            )
+            plt.gca().add_patch(circle)
+    
+        plt.scatter(
+            [sensor_to_loc[sensor][0] for sensor in sensors],
+            [sensor_to_loc[sensor][1] for sensor in sensors],
+            s=65,
+            c=[theme_colors[i % len(theme_colors)] for i in range(len(sensors))],
+            edgecolor="black",
+            vmin=0,
+            marker="s",
+            label="sensor"
+        )
+    
+        for sensor in sensors:
+            plt.annotate(
+                f"{sensor_to_nice_int[sensor]}",
+                (sensor_to_loc[sensor][0], sensor_to_loc[sensor][1]),
+                xytext=(5, 5),
+                textcoords="offset points",
+                ha='left',
+                va='bottom'
+            )
+        legend_handles = [
+            Line2D([0], [0],
+                   color=theme_colors[i % len(theme_colors)],
+                   linestyle='dashed',
+                   linewidth=1.5,
+                   label=f"Sensor {sensor_to_nice_int[sensor]}")
+            for i, sensor in enumerate(sensors)
+        ]
+        plt.legend(handles=legend_handles,loc='upper left', bbox_to_anchor=(1,1))
+        return plt.show()
+
+    _()
+
     return
 
 
@@ -842,6 +912,7 @@ def _(np):
         data["error"] = np.sqrt(
             (data["x_s"] - data["x_s_pred"]) ** 2 + (data["y_s"] - data["y_s_pred"]) ** 2
         )
+
     return (calculate_errors,)
 
 
@@ -926,6 +997,7 @@ def _(
         calculate_errors(data_loo)
 
         return data_loo
+
     return (do_loo_cv,)
 
 
@@ -1111,6 +1183,7 @@ def _(Ellipse, np, transforms):
 
         ellipse.set_transform(transf + ax.transData)
         return ax.add_patch(ellipse)
+
     return (draw_confidence_ellipse,)
 
 
@@ -1217,6 +1290,7 @@ def _(ExtraTreesRegressor, sensors):
         tree_ensemble = ExtraTreesRegressor(n_estimators=n_estimators)
         tree_ensemble.fit(sensor_network_readout, source_locs)
         return tree_ensemble
+
     return (train_tree_ensemble,)
 
 
@@ -1462,11 +1536,13 @@ def _(ExtraTreesClassifier, LeaveOneOut, np, sensors):
             safety_pred = tree_ensemble.predict(sensor_network_readout_test)[0]
             prob = tree_ensemble.predict_proba(sensor_network_readout_test)[0][1]
             # store prediction on test network readout.
+            data_loo["pred_safe"] = data_loo["pred_safe"].astype(object)
             data_loo.loc[test_index, "pred_safe"] = safety_pred
             data_loo.loc[test_index, "score"] = prob
         data_loo["agreement"] = data_loo["background"] == data_loo["pred_safe"]
 
         return data_loo
+
     return (do_loo_cv_classification,)
 
 
@@ -1653,15 +1729,18 @@ def _(mo):
 
 
 @app.cell
-def _(np):
-    def response_fun(d, S, a, b):
-        #a = 14
-        #b = 28
+def _(bkg_avg, np):
+    def response_fun(d, c1, c2, c3, c4):
+        a = 14/25.4
+        b = 28/25.4
+        S = 2.664e+5
+        eff = 0.3
         alpha = a / (2 * d)
         beta = b / (2 * d)
-        omega = 4 * np.arctan(alpha * beta / np.sqrt(1 + alpha**2 + beta**2)) 
+        omega = 4 * np.arctan((alpha * beta)*c1 / np.sqrt(1 + alpha**2 + beta**2)*c2)*c3 + c4
 
-        return (S * 0.3 * omega) / (4 * np.pi) + 12
+        return (S * eff * omega) / (4 * np.pi) + bkg_avg['16518']
+
     return (response_fun,)
 
 
@@ -1669,10 +1748,16 @@ def _(np):
 def _(np, optimize, output_distance_data, response_fun):
     fit_results = optimize.curve_fit(
         response_fun, output_distance_data["distance [in]"], output_distance_data["detector output"], 
-        bounds=(0, np.inf), p0=[15.984e+6, 14, 28]
+        bounds=(0, np.inf), p0=[1, 1, 1, 0]
     )
     opt_params = fit_results[0]
     return (opt_params,)
+
+
+@app.cell
+def _(opt_params):
+    opt_params
+    return
 
 
 @app.cell
@@ -1728,6 +1813,7 @@ def _(box_dims, np, response_fun, root_scalar):
         )
         assert root_finding_res.converged
         return root_finding_res.root
+
     return (find_distance_to_detector,)
 
 
@@ -1750,7 +1836,7 @@ def _(mo):
 @app.cell
 def _(bkg_avg, np):
     # Calculated the significant threshold for each detector based on the measured background
-    Nds = 2.326*np.sqrt(bkg_avg) + bkg_avg # Currie eqn
+    Nds = 2.326*np.sqrt(bkg_avg*60)/60 + bkg_avg # Currie eqn
     Nds
     return (Nds,)
 
@@ -1759,6 +1845,7 @@ def _(bkg_avg, np):
 def _(Nds):
     def select_responsive_sensors(data, exp, sensors):
         return [sensor for sensor in sensors if data.loc[exp, sensor] > Nds[sensor]]
+
     return (select_responsive_sensors,)
 
 
@@ -1798,6 +1885,7 @@ def _(Nds):
         for sensor in sensors:
             output_minus_Nds[sensor] -= Nds[sensor]
         return list(output_minus_Nds.sort_values(ascending=False).index[0:3])
+
     return (select_top_three_sensors,)
 
 
@@ -1936,6 +2024,7 @@ def _(np, select_top_three_sensors, sensor_to_loc):
         game_sensors = select_top_three_sensors(data, exp, sensors)
         wts = data.loc[exp, game_sensors] / data.loc[exp, game_sensors].sum()
         return np.sum([np.array(sensor_to_loc[sensor]) * wts[sensor] for sensor in game_sensors], axis=0)
+
     return (dumb_triangulation,)
 
 
@@ -2242,14 +2331,52 @@ def _(sensors, tracking_data, tree_ensemble):
 
 
 @app.cell
+def _(tracking_data):
+    tracking_data
+    return
+
+
+@app.cell
+def _(data_loo, sensors, test_index):
+    data_loo.loc[test_index, sensors]
+    return
+
+
+@app.cell
+def _(np, sensors, tracking_data, tree_ensemble):
+    # Initialize column with object dtype ONCE before the loop
+    tracking_data["ensemble pred source locs"] = np.empty(len(tracking_data), dtype=object)
+
+    for test_index in range(len(tracking_data)):
+        sensor_network_readout_test = tracking_data.loc[test_index, sensors]
+    
+        predictions = np.array(
+            [tree.predict(sensor_network_readout_test.to_frame().T)[0] for tree in tree_ensemble.estimators_]
+        )
+    
+        # Use .at instead of .loc for storing arrays in individual cells
+        tracking_data.at[test_index, "ensemble pred source locs"] = predictions
+    return (test_index,)
+
+
+@app.cell
+def _(tracking_data):
+    tracking_data
+    return
+
+
+@app.cell
 def _(
     box_dims,
+    draw_confidence_ellipse,
     draw_obstacles,
+    np,
     plt,
     sensor_to_nice_int,
     sensors,
     setup_environment,
     thing_to_color,
+    tracking_data,
     viz_sensor_locs,
 ):
     def viz_track(tracking_data_pred, sensor_to_loc):
@@ -2281,6 +2408,10 @@ def _(
             linestyle="--",
             label="predicted\npath"
         )
+        for exp in range(len(tracking_data)):
+            xs_preds = np.array([xs[0] for xs in tracking_data.loc[exp, "ensemble pred source locs"]])
+            ys_preds = np.array([xs[1] for xs in tracking_data.loc[exp, "ensemble pred source locs"]])
+            draw_confidence_ellipse(xs_preds, ys_preds, ax, facecolor=thing_to_color["pred source loc"], alpha=0.2)
         for sensor in sensors:
             plt.annotate(
                 f"{sensor_to_nice_int[sensor]}",
@@ -2296,12 +2427,18 @@ def _(
         plt.legend(handles[-3:], labels[-3:], bbox_to_anchor=(1.05, 0.65), loc='upper left', borderaxespad=0)
         plt.savefig("tracking_viz.pdf", format="pdf", bbox_inches='tight')
         plt.show()
+
     return (viz_track,)
 
 
 @app.cell
 def _(sensor_to_loc, tracking_data_pred, viz_track):
     viz_track(tracking_data_pred, sensor_to_loc)
+    return
+
+
+@app.cell
+def _():
     return
 
 
