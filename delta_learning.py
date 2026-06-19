@@ -572,11 +572,11 @@ def _(
     from matplotlib.lines import Line2D
     def _():
         setup_environment(box_dims)
-    
+
         for i, sensor in enumerate(sensors):
             x, y = sensor_to_loc[sensor]
             color = theme_colors[i % len(theme_colors)]
-        
+
             circle = patches.Circle(
                 (x, y),
                 radius=20,
@@ -586,7 +586,7 @@ def _(
                 linewidth=1.5
             )
             plt.gca().add_patch(circle)
-    
+
         plt.scatter(
             [sensor_to_loc[sensor][0] for sensor in sensors],
             [sensor_to_loc[sensor][1] for sensor in sensors],
@@ -597,7 +597,7 @@ def _(
             marker="s",
             label="sensor"
         )
-    
+
         for sensor in sensors:
             plt.annotate(
                 f"{sensor_to_nice_int[sensor]}",
@@ -616,10 +616,10 @@ def _(
             for i, sensor in enumerate(sensors)
         ]
         plt.legend(handles=legend_handles,loc='upper left', bbox_to_anchor=(1,1))
+        plt.savefig("Detector ranges.pdf", format="pdf", bbox_inches='tight')
         return plt.show()
 
     _()
-
     return
 
 
@@ -1188,6 +1188,68 @@ def _(Ellipse, np, transforms):
 
 
 @app.cell
+def _(Ellipse, np, transforms):
+    def draw_confidence_ellipse_tracking_jackknife(x, y, ax, n_std=1.0, facecolor='none', **kwargs):
+        if x.size != y.size:
+            raise ValueError("x and y must be the same size")
+    
+        n = len(x)
+    
+        # --- Jackknife resampling ---
+        # For each observation i, compute the covariance matrix leaving out observation i
+        jack_cov = np.zeros((n, 2, 2))
+        for i in range(n):
+            x_jack = np.delete(x, i)
+            y_jack = np.delete(y, i)
+            jack_cov[i] = np.cov(x_jack, y_jack)
+    
+        # Jackknife estimate of covariance matrix (mean of leave-one-out estimates)
+        cov_jack = np.mean(jack_cov, axis=0)
+
+        # Jackknife standard error of each cov element
+        jack_se = np.sqrt(((n - 1) / n) * np.sum((jack_cov - cov_jack) ** 2, axis=0))
+
+        # --- Bias-corrected covariance estimate ---
+        cov_original = np.cov(x, y)
+        cov_bias_corrected = n * cov_original - (n - 1) * cov_jack
+
+        # --- Ellipse geometry from bias-corrected covariance ---
+        pearson = cov_bias_corrected[0, 1] / np.sqrt(
+            cov_bias_corrected[0, 0] * cov_bias_corrected[1, 1]
+        )
+        pearson = np.clip(pearson, -1 + 1e-10, 1 - 1e-10)  # numerical safety
+
+        ell_radius_x = np.sqrt(1 + pearson)
+        ell_radius_y = np.sqrt(1 - pearson)
+
+        ellipse = Ellipse(
+            (0, 0),
+            width=ell_radius_x * 2,
+            height=ell_radius_y * 2,
+            facecolor=facecolor,
+            **kwargs
+        )
+
+        # --- Scale using jackknife standard errors instead of raw std devs ---
+        # jack_se[0,0] = SE of variance in x, jack_se[1,1] = SE of variance in y
+        scale_x = np.sqrt(jack_se[0, 0]) * n_std
+        scale_y = np.sqrt(jack_se[1, 1]) * n_std
+
+        mean_x = np.mean(x)
+        mean_y = np.mean(y)
+
+        transf = transforms.Affine2D() \
+            .rotate_deg(45) \
+            .scale(scale_x, scale_y) \
+            .translate(mean_x, mean_y)
+
+        ellipse.set_transform(transf + ax.transData)
+        return ax.add_patch(ellipse)
+
+    return (draw_confidence_ellipse_tracking_jackknife,)
+
+
+@app.cell
 def _(
     box_dims,
     data_loo,
@@ -1730,16 +1792,19 @@ def _(mo):
 
 @app.cell
 def _(bkg_avg, np):
-    def response_fun(d, c1, c2, c3, c4):
+    def response_fun(d, mu, d_0):
         a = 14/25.4
         b = 28/25.4
         S = 2.664e+5
         eff = 0.3
-        alpha = a / (2 * d)
-        beta = b / (2 * d)
-        omega = 4 * np.arctan((alpha * beta)*c1 / np.sqrt(1 + alpha**2 + beta**2)*c2)*c3 + c4
-
-        return (S * eff * omega) / (4 * np.pi) + bkg_avg['16518']
+        #A = 0.5
+        alpha = a / (2 * d + d_0)
+        beta = b / (2 * d + d_0)
+        #alpha = a / (2 * d)
+        #beta = b / (2 * d)
+        omega = 4 * np.arctan((alpha * beta) / np.sqrt(1 + alpha**2 + beta**2))
+    
+        return (S * eff * omega * np.exp(-mu*d)) / 4*np.pi + bkg_avg['16518']
 
     return (response_fun,)
 
@@ -1748,7 +1813,7 @@ def _(bkg_avg, np):
 def _(np, optimize, output_distance_data, response_fun):
     fit_results = optimize.curve_fit(
         response_fun, output_distance_data["distance [in]"], output_distance_data["detector output"], 
-        bounds=(0, np.inf), p0=[1, 1, 1, 0]
+        bounds=(0, np.inf), p0=[0.2, 1]
     )
     opt_params = fit_results[0]
     return (opt_params,)
@@ -1757,6 +1822,18 @@ def _(np, optimize, output_distance_data, response_fun):
 @app.cell
 def _(opt_params):
     opt_params
+    return
+
+
+@app.cell
+def _(np, opt_params, output_distance_data, response_fun):
+    def _():
+        predicted = np.array([response_fun(d, *opt_params) for d in output_distance_data["distance [in]"]])
+        actual = np.array(output_distance_data["detector output"])
+        return print(predicted-actual)
+
+
+    _()
     return
 
 
@@ -1777,8 +1854,25 @@ def _(np, opt_params, output_distance_data, plt, response_fun):
     plt.plot(
         ds, [response_fun(d, *opt_params) for d in ds], label="model fit"
     )
-    plt.savefig("readout_vs_distance.pdf", format="pdf", bbox_inches="tight")
+
+    # Calculate MSE
+    predicted = np.array([response_fun(d, *opt_params) for d in output_distance_data["distance [in]"]])
+    actual = np.array(output_distance_data["detector output"])
+    mse = np.mean((predicted - actual) ** 2)
+
+    rmse = np.sqrt(mse)
+
+    plt.text(
+        0.97, 0.95,
+        f"RMSE = {rmse:.4g} CPS",
+        transform=plt.gca().transAxes,
+        ha="right", va="top",
+        bbox=dict(boxstyle="round,pad=0.3", facecolor="white", edgecolor="gray", alpha=0.8)
+    )
+
     plt.legend()
+    plt.savefig("readout_vs_distance.pdf", format="pdf", bbox_inches="tight")
+    plt.show()
     return
 
 
@@ -1836,7 +1930,7 @@ def _(mo):
 @app.cell
 def _(bkg_avg, np):
     # Calculated the significant threshold for each detector based on the measured background
-    Nds = 2.326*np.sqrt(bkg_avg*60)/60 + bkg_avg # Currie eqn
+    Nds = (2.326*np.sqrt(bkg_avg*60))/60 + bkg_avg # Currie eqn
     Nds
     return (Nds,)
 
@@ -2349,11 +2443,11 @@ def _(np, sensors, tracking_data, tree_ensemble):
 
     for test_index in range(len(tracking_data)):
         sensor_network_readout_test = tracking_data.loc[test_index, sensors]
-    
+
         predictions = np.array(
             [tree.predict(sensor_network_readout_test.to_frame().T)[0] for tree in tree_ensemble.estimators_]
         )
-    
+
         # Use .at instead of .loc for storing arrays in individual cells
         tracking_data.at[test_index, "ensemble pred source locs"] = predictions
     return (test_index,)
@@ -2366,9 +2460,169 @@ def _(tracking_data):
 
 
 @app.cell
+def _(np):
+    from scipy.stats import gaussian_kde
+    from matplotlib.colors import Normalize
+    from matplotlib.cm import ScalarMappable
+
+
+    def plot_ensemble_kde(ax, ensemble_array, weights=None, true_position=None, cmap="hot_r",
+                          kde_resolution=100, alpha_fill=0.3, alpha_contour=0.9,
+                          bw_method="silverman", label=None):
+        """
+        Compute and plot the Kernel Density Estimate of ensemble tree predictions
+        on a given matplotlib Axes.
+
+        Parameters
+        ----------
+        ax : matplotlib.axes.Axes
+            The axis on which to render the KDE.
+        ensemble_array : np.ndarray, shape (2, N)
+            Array of ensemble predictions where row 0 is x-coordinates and
+            row 1 is y-coordinates (e.g. 250 trees → shape (2, 250)).
+        true_position : array-like of shape (2,), optional
+            Ground-truth (x, y) position to mark on the plot.
+        cmap : str or Colormap
+            Colormap used to colour the density fill. Default 'hot_r'.
+        kde_resolution : int
+            Number of grid points per axis for evaluating the KDE. Default 100.
+        alpha_fill : float
+            Opacity of the filled density surface. Default 0.75.
+        alpha_contour : float
+            Opacity of the density contour lines. Default 0.9.
+        bw_method : str or float
+            Bandwidth estimation method passed to scipy.stats.gaussian_kde.
+            'scott' (default) or 'silverman', or a scalar factor.
+        label : str, optional
+            Text label drawn near the mean prediction (useful when overlaying
+            multiple positions on the same axis).
+
+        Returns
+        -------
+        kde : scipy.stats.gaussian_kde
+            The fitted KDE object (useful for downstream queries, e.g. pdf(point)).
+        mean_pos : np.ndarray, shape (2,)
+            Mean (x, y) of the ensemble predictions.
+        """
+        if ensemble_array.shape[0] != 2:
+            raise ValueError(
+                f"ensemble_array must have shape (2, N), got {ensemble_array.shape}. "
+                "Row 0 = x, Row 1 = y."
+            )
+
+        x, y = ensemble_array[0], ensemble_array[1]
+
+        # ------------------------------------------------------------------ #
+        # 1. Fit KDE                                                           #
+        # ------------------------------------------------------------------ #
+        kde = gaussian_kde(ensemble_array, bw_method=bw_method, weights=weights)
+        # ------------------------------------------------------------------ #
+        # 2. Evaluation grid — add a small margin around the prediction cloud #
+        # ------------------------------------------------------------------ #
+        margin_x = (x.max() - x.min()) * 0.35 + 1e-6   # guard against zero spread
+        margin_y = (y.max() - y.min()) * 0.35 + 1e-6
+
+        xi = np.linspace(x.min() - margin_x, x.max() + margin_x, kde_resolution)
+        yi = np.linspace(y.min() - margin_y, y.max() + margin_y, kde_resolution)
+        Xi, Yi = np.meshgrid(xi, yi)
+        grid_coords = np.vstack([Xi.ravel(), Yi.ravel()])
+        Zi = kde(grid_coords).reshape(Xi.shape)
+
+        # ------------------------------------------------------------------ #
+        # 3. Render filled density surface + contours                         #
+        # ------------------------------------------------------------------ #
+        ax.contourf(Xi, Yi, Zi, levels=12, cmap=cmap, alpha=alpha_fill)
+        ax.contour(Xi, Yi, Zi, levels=6, cmap=cmap, alpha=alpha_contour,
+                   linewidths=0.6)
+
+        # ------------------------------------------------------------------ #
+        # 4. Mark the mean prediction                                         #
+        # ------------------------------------------------------------------ #
+        """
+        mean_pos = ensemble_array.mean(axis=1)
+        ax.scatter(*mean_pos, marker="+", s=120, color="white", linewidths=1.8,
+                   zorder=5, label="Mean prediction" if label is None else None)
+
+        if label is not None:
+            ax.annotate(label, xy=mean_pos, xytext=(4, 4),
+                        textcoords="offset points", color="white",
+                        fontsize=7, fontweight="bold", zorder=6)
+        """
+        # ------------------------------------------------------------------ #
+        # 5. Optionally mark ground truth                                     #
+        # ------------------------------------------------------------------ #
+        if true_position is not None:
+            tp = np.asarray(true_position)
+            ax.scatter(*tp, marker="*", s=180, color="cyan", edgecolors="black",
+                       linewidths=0.6, zorder=6, label="True position")
+
+        return kde
+
+    """
+    # ======================================================================= #
+    # Demo — remove or guard with  if __name__ == "__main__":  in production  #
+    # ======================================================================= #
+    if __name__ == "__main__":
+        rng = np.random.default_rng(42)
+        n_trees = 250
+        n_positions = 6
+
+        # Simulate a source moving along a curved path
+        t = np.linspace(0, 2 * np.pi, n_positions, endpoint=False)
+        true_xs = 3.0 * np.cos(t)
+        true_ys = 1.5 * np.sin(t)
+
+        # Each position has growing uncertainty to show changing KDE width
+        noise_scale = np.linspace(0.05, 0.35, n_positions)
+
+        fig, axes = plt.subplots(2, 3, figsize=(12, 7),
+                                 facecolor="#0d0d0d")
+        fig.suptitle("Ensemble KDE — Source Path Error Visualisation",
+                     color="white", fontsize=13, y=1.01)
+
+        for i, ax in enumerate(axes.flat):
+            ax.set_facecolor("#0d0d0d")
+
+            # Simulate ensemble predictions: bivariate Gaussian centred on truth
+            preds = rng.normal(
+                loc=[[true_xs[i]], [true_ys[i]]],
+                scale=noise_scale[i],
+                size=(2, n_trees)
+            )
+
+            kde, mean = plot_ensemble_kde(
+                ax=ax,
+                ensemble_array=preds,
+                true_position=(true_xs[i], true_ys[i]),
+                cmap="inferno",
+                kde_resolution=120,
+                label=f"t={i}",
+            )
+
+            ax.set_title(f"Position {i+1}  (σ≈{noise_scale[i]:.2f})",
+                         color="white", fontsize=9)
+            ax.tick_params(colors="grey", labelsize=7)
+            for spine in ax.spines.values():
+                spine.set_edgecolor("#333333")
+
+            # Legend only on first panel
+            if i == 0:
+                leg = ax.legend(fontsize=7, facecolor="#1a1a1a",
+                                labelcolor="white", framealpha=0.8)
+
+        plt.tight_layout()
+        plt.savefig("/mnt/user-data/outputs/kde_ensemble_demo.png",
+                    dpi=150, bbox_inches="tight", facecolor=fig.get_facecolor())
+        plt.show()
+        print("Saved → kde_ensemble_demo.png")
+    """
+    return
+
+
+@app.cell
 def _(
     box_dims,
-    draw_confidence_ellipse,
+    draw_confidence_ellipse_tracking_jackknife,
     draw_obstacles,
     np,
     plt,
@@ -2408,10 +2662,23 @@ def _(
             linestyle="--",
             label="predicted\npath"
         )
+    
+
         for exp in range(len(tracking_data)):
             xs_preds = np.array([xs[0] for xs in tracking_data.loc[exp, "ensemble pred source locs"]])
             ys_preds = np.array([xs[1] for xs in tracking_data.loc[exp, "ensemble pred source locs"]])
-            draw_confidence_ellipse(xs_preds, ys_preds, ax, facecolor=thing_to_color["pred source loc"], alpha=0.2)
+
+            draw_confidence_ellipse_tracking_jackknife(xs_preds, ys_preds, ax, facecolor=thing_to_color["pred source loc"], alpha=0.15)
+            #plot_ensemble_kde(ax, combined, bw_method='scott', cmap="YlGn", alpha_fill=0.01)
+        
+        """
+        # Build weighted combined array
+        n_positions = len(list_of_arrays)
+        n_trees = list_of_arrays[0].shape[1]  # 250
+        weights = np.tile(1.0 / n_trees, n_positions * n_trees)
+        combined = np.hstack(list_of_arrays)  # shape (2, N*250)
+        plot_ensemble_kde(ax, combined, bw_method='scott', weights=weights, cmap="YlGn")
+        """
         for sensor in sensors:
             plt.annotate(
                 f"{sensor_to_nice_int[sensor]}",
