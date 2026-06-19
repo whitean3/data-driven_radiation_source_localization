@@ -1192,9 +1192,9 @@ def _(Ellipse, np, transforms):
     def draw_confidence_ellipse_tracking_jackknife(x, y, ax, n_std=1.0, facecolor='none', **kwargs):
         if x.size != y.size:
             raise ValueError("x and y must be the same size")
-    
+
         n = len(x)
-    
+
         # --- Jackknife resampling ---
         # For each observation i, compute the covariance matrix leaving out observation i
         jack_cov = np.zeros((n, 2, 2))
@@ -1202,7 +1202,7 @@ def _(Ellipse, np, transforms):
             x_jack = np.delete(x, i)
             y_jack = np.delete(y, i)
             jack_cov[i] = np.cov(x_jack, y_jack)
-    
+
         # Jackknife estimate of covariance matrix (mean of leave-one-out estimates)
         cov_jack = np.mean(jack_cov, axis=0)
 
@@ -1803,7 +1803,7 @@ def _(bkg_avg, np):
         #alpha = a / (2 * d)
         #beta = b / (2 * d)
         omega = 4 * np.arctan((alpha * beta) / np.sqrt(1 + alpha**2 + beta**2))
-    
+
         return (S * eff * omega * np.exp(-mu*d)) / 4*np.pi + bkg_avg['16518']
 
     return (response_fun,)
@@ -2459,7 +2459,7 @@ def _(tracking_data):
     return
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(np):
     from scipy.stats import gaussian_kde
     from matplotlib.colors import Normalize
@@ -2662,15 +2662,15 @@ def _(
             linestyle="--",
             label="predicted\npath"
         )
-    
+
 
         for exp in range(len(tracking_data)):
             xs_preds = np.array([xs[0] for xs in tracking_data.loc[exp, "ensemble pred source locs"]])
             ys_preds = np.array([xs[1] for xs in tracking_data.loc[exp, "ensemble pred source locs"]])
 
-            draw_confidence_ellipse_tracking_jackknife(xs_preds, ys_preds, ax, facecolor=thing_to_color["pred source loc"], alpha=0.15)
+            draw_confidence_ellipse_tracking_jackknife(xs_preds, ys_preds, ax, facecolor=thing_to_color["pred source loc"], alpha=0.15, n_std=1.6)
             #plot_ensemble_kde(ax, combined, bw_method='scott', cmap="YlGn", alpha_fill=0.01)
-        
+
         """
         # Build weighted combined array
         n_positions = len(list_of_arrays)
@@ -2701,6 +2701,89 @@ def _(
 @app.cell
 def _(sensor_to_loc, tracking_data_pred, viz_track):
     viz_track(tracking_data_pred, sensor_to_loc)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Plot Error vs Variance
+    """)
+    return
+
+
+@app.cell
+def _(data_loo):
+    len(data_loo["error"].values)
+    return
+
+
+@app.cell
+def _(data_loo, np, plt):
+    def plot_err_vs_var():
+        avg_vars = []
+        for exp in range(len(data_loo)):
+            xs_preds = np.array([xs[0] for xs in data_loo.loc[exp, "ensemble pred source locs"]])
+            ys_preds = np.array([xs[1] for xs in data_loo.loc[exp, "ensemble pred source locs"]])
+            x_var = np.var(xs_preds)
+            y_var = np.var(ys_preds)
+            avg_vars.append((x_var+y_var)/2)
+    
+        error = data_loo["error"].values
+        a, b = np.polyfit(avg_vars, error, 1)
+        print(a,b)
+        plt.scatter(avg_vars,error)
+        plt.plot(range(0,150), a*range(0,150) + b, linestyle="dashed", color='black')
+        plt.xlabel("Variance Across Trees (in)")
+        plt.ylabel("LOOCV prediction error (in)")
+        plt.show()
+        return
+
+    return (plot_err_vs_var,)
+
+
+@app.cell
+def _(plot_err_vs_var):
+    plot_err_vs_var()
+    return
+
+
+@app.cell
+def _(np):
+    np.max
+    return
+
+
+@app.cell
+def _(data_loo, np, plt):
+    def plot_err_vs_std(n_std=1):
+        avg_std = []
+        for exp in range(len(data_loo)):
+            xs_preds = np.array([xs[0] for xs in data_loo.loc[exp, "ensemble pred source locs"]])
+            ys_preds = np.array([xs[1] for xs in data_loo.loc[exp, "ensemble pred source locs"]])
+            cov = np.cov(xs_preds, ys_preds)
+            pearson = cov[0, 1]/np.sqrt(cov[0, 0] * cov[1, 1])
+            # Using a special case to obtain the eigenvalues of this
+            # two-dimensional dataset.
+    
+            # Calculating the standard deviation of x from
+            # the squareroot of the variance and multiplying
+            # with the given number of standard deviations.
+            x_std = np.sqrt(cov[0, 0]) * n_std
+            y_std = np.sqrt(cov[1, 1]) * n_std
+            avg_std.append((x_std+y_std)/2)
+    
+        error = data_loo["error"].values
+        a, b = np.polyfit(avg_std, error, 1)
+        print(a,b)
+        plt.scatter(avg_std,error)
+        plt.plot(range(0,20), a*range(0,20) + b, linestyle="dashed", color='black')
+        plt.xlabel("STD of Trees (in)")
+        plt.ylabel("LOOCV prediction error (in)")
+        plt.xlim(0,int(np.max(error)))
+        plt.show()
+        return
+    plot_err_vs_std()
     return
 
 
