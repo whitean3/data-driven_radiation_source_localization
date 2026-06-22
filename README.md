@@ -11,5 +11,5 @@ forward model data: Contains raw csv's of the detector array outputs for each ex
 Background_for_localization_model.csv: background data used for source presence classifier
 
 ## code
-delta_learning.py has the most uptodat data processing and figures.
+model_analysis.py has the most uptodat data processing and figures.
 see the marimo notebook to be run in Python.
