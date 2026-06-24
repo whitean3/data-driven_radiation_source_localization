@@ -32,6 +32,7 @@ def _():
     plt.rcParams["font.size"] = 16
     from sklearn.ensemble import ExtraTreesClassifier, ExtraTreesRegressor, IsolationForest
     from sklearn.model_selection import LeaveOneOut, train_test_split
+    from matplotlib.ticker import FuncFormatter
 
     return (
         ConfusionMatrixDisplay,
@@ -737,12 +738,6 @@ def _(data, plt, sensor_to_nice_int, sensors, sns, theme_colors):
 
 
 @app.cell
-def _(matplotlib):
-    matplotlib.cm.get_cmap("coolwarm")
-    return
-
-
-@app.cell
 def _(data_bkg):
     data_bkg
     return
@@ -769,24 +764,25 @@ def _(data, data_bkg, matplotlib, np, plt, sensor_to_nice_int, sensors, sns):
                     'color': 'black',       # Makes the inside of the dots black
                     'edgecolor': 'white',   # Adds the white outline
                 },
-                diag_kws={'bins': bins, 'color': "black", 'alpha': 0.7}
+                diag_kws={'bins': bins, 'color': "black", 'alpha': 0.7},
+            
             )
 
-        g.figure.text(0.5, -0.01, 'sensor', ha='center', va='bottom', fontsize=30)
-        g.figure.text(-0.01, 0.5, 'sensor', ha='left', va='center', rotation='vertical', fontsize=30)
+        g.figure.text(0.5, -0.01, 'sensor (CPS)', ha='center', va='bottom', fontsize=30)
+        g.figure.text(-0.01, 0.5, 'sensor (CPS)', ha='left', va='center', rotation='vertical', fontsize=30)
 
         corr_matrix = data[sensors].corr()
         max_corr = np.ceil(corr_matrix.abs().values[~np.eye(corr_matrix.abs().shape[0], dtype=bool)].max() * 10) / 10
-        cmap = matplotlib.cm.get_cmap("coolwarm")
+        cmap = matplotlib.colormaps["coolwarm"]
         norm = matplotlib.colors.Normalize(vmin=-max_corr, vmax=max_corr) # Correlation bounds
         for i, sensor_i in enumerate(sensors):
             for j, sensor_j in enumerate(sensors):
                 ax = g.axes[i, j]
-
+            
                 if ax is not None:    
                     ax.set_xscale('log')
                     ax.set_yscale('log')
-
+                
                     ax.set_xlim(padded_min, padded_max)
                     if i != j:  # Only set Y limits on the off-diagonal scatter plots
                         ax.set_ylim(padded_min, padded_max)
@@ -817,7 +813,8 @@ def _(data, data_bkg, matplotlib, np, plt, sensor_to_nice_int, sensors, sns):
 
         bkg_handle = matplotlib.lines.Line2D([], [], color='forestgreen', marker='+', 
                                    markersize=10, linestyle='None', label='source absent')
-
+    
+    
         # --- 3. Draw the Legend on the Figure ---
         # We place it slightly higher than the colorbar (e.g., bottom at 0.60) in the empty space
         g.figure.legend(
@@ -1929,22 +1926,20 @@ def _(mo):
 @app.cell
 def _(bkg_avg, np):
     # Calculated the significant threshold for each detector based on the measured background
-    Nds = (2.326*np.sqrt(bkg_avg*60))/60 + bkg_avg # Currie eqn
+    #Nds = (2.326*np.sqrt(bkg_avg)) + bkg_avg # Currie eqn
+    Nds = (20.4*np.sqrt(bkg_avg*60))/60 + bkg_avg # psudo-optimized k-sigma
     Nds
     return (Nds,)
 
 
-@app.cell
-def _(Nds):
-    def select_responsive_sensors(data, exp, sensors):
-        return [sensor for sensor in sensors if data.loc[exp, sensor] > Nds[sensor]]
-
-    return (select_responsive_sensors,)
+@app.function
+def select_responsive_sensors(data, exp, sensors, Nds):
+    return [sensor for sensor in sensors if data.loc[exp, sensor] > Nds[sensor]]
 
 
 @app.cell
-def _(data, select_responsive_sensors, sensors):
-    select_responsive_sensors(data, 0, sensors)
+def _(Nds, data, sensors):
+    select_responsive_sensors(data, 0, sensors, Nds)
     return
 
 
@@ -1957,8 +1952,8 @@ def _(mo):
 
 
 @app.cell
-def _(data, select_responsive_sensors, sensors):
-    ids_false_neg_trad = [exp for exp in range(data.shape[0]) if len(select_responsive_sensors(data, exp, sensors)) == 0]
+def _(Nds, data, sensors):
+    ids_false_neg_trad = [exp for exp in range(data.shape[0]) if len(select_responsive_sensors(data, exp, sensors, Nds)) == 0]
     ids_false_neg_trad # exclude these for error analysis
     return
 
@@ -1971,20 +1966,17 @@ def _(mo):
     return
 
 
-@app.cell
-def _(Nds):
-    def select_top_three_sensors(data, exp, sensors):
-        output_minus_Nds = data.loc[0, sensors].copy()
-        for sensor in sensors:
-            output_minus_Nds[sensor] -= Nds[sensor]
-        return list(output_minus_Nds.sort_values(ascending=False).index[0:3])
-
-    return (select_top_three_sensors,)
+@app.function
+def select_top_three_sensors(data, exp, sensors, Nds):
+    output_minus_Nds = data.loc[0, sensors].copy()
+    for sensor in sensors:
+        output_minus_Nds[sensor] -= Nds[sensor]
+    return list(output_minus_Nds.sort_values(ascending=False).index[0:3])
 
 
 @app.cell
-def _(data, select_top_three_sensors, sensors):
-    select_top_three_sensors(data, 20, sensors)
+def _(Nds, data, sensors):
+    select_top_three_sensors(data, 20, sensors, Nds)
     return
 
 
@@ -1999,23 +1991,18 @@ def _(mo):
 @app.cell
 def _(
     box_dims,
-    data,
     differential_evolution,
     find_distance_to_detector,
     np,
-    opt_params,
-    select_responsive_sensors,
-    select_top_three_sensors,
     sensor_to_loc,
-    sensors,
 ):
-    def trad_localize(data, exp, sensors, opt_params, verbose=False):
+    def trad_localize(data, exp, sensors, opt_params, Nds, verbose=False):
         if verbose:
             print(f"expt {exp}")
 
         # what sensors are in the game?
-        game_sensors = select_responsive_sensors(data, exp, sensors)
-
+        game_sensors = select_responsive_sensors(data, exp, sensors, Nds)
+        #game_sensors = sensors
         if len(game_sensors) == 0:
             print(f"FALSE NEGATIVE: expt {exp} has no detectors with significant response.")
             return np.array([np.nan, np.nan])
@@ -2023,7 +2010,7 @@ def _(
         if len(game_sensors) < 3: # we need three...
             # just select three highest above Nds
             print(f"WARNING: expt {exp} has only {len(game_sensors)} detectors with significant response. selecting top 3.")
-            game_sensors = select_top_three_sensors(data, exp, sensors)
+            game_sensors = select_top_three_sensors(data, exp, sensors, Nds)
 
         if verbose:
             print("sensor data in the game:", data.loc[exp, game_sensors])
@@ -2061,8 +2048,82 @@ def _(
 
         return xy_pred
 
-    trad_localize(data, 3, sensors, opt_params)
+
+
     return (trad_localize,)
+
+
+@app.cell
+def _(bkg_avg, np):
+    for n in list(range(19*5,22*5,1)):
+        print(n/5)
+        print((n/5)*np.sqrt(bkg_avg*60)/60 + bkg_avg)
+    print("original Nds")
+    print((2.326*np.sqrt(bkg_avg)) + bkg_avg)
+    return
+
+
+@app.cell
+def _(np, pd):
+    errors_by_k =  pd.DataFrame({"k":[n/5 for n in list(range(19*5,22*5,1))],"avg_err":np.zeros(len(range(19*5,22*5,1)))})
+    return (errors_by_k,)
+
+
+@app.cell
+def _(errors_by_k):
+    errors_by_k
+    return
+
+
+@app.cell
+def _(errors_by_k):
+    errors_by_k.loc[0,"avg_err"] = 1
+    return
+
+
+@app.cell
+def _(errors_by_k):
+    errors_by_k.loc[1,"k"]
+    return
+
+
+@app.cell
+def _(bkg_avg, data, errors_by_k, np, opt_params, sensors, trad_localize):
+    def optimize_Nds():
+        avg_errs = []
+        for n in range(len(errors_by_k)):
+            print("Testing k = ", errors_by_k.loc[n,"k"])
+            Nds_n = (errors_by_k.loc[n,"k"]*np.sqrt(bkg_avg*60))/60 + bkg_avg
+            xy_trad_preds = [trad_localize(data, exp, sensors, opt_params, Nds_n) for exp in range(data.shape[0])]
+
+            errors_by_k.loc[n,"avg_err"] =(
+                np.mean(
+                np.sqrt((data["x_s"] - [xy_trad_preds[exp][0] for exp in range(data.shape[0])]) ** 2 + (data["y_s"] - 
+                        [xy_trad_preds[exp][1] for exp in range(data.shape[0])]) ** 2)
+                )
+            )
+        
+        return avg_errs
+
+    return (optimize_Nds,)
+
+
+@app.cell
+def _(optimize_Nds):
+    optimize_Nds()
+    return
+
+
+@app.cell
+def _(errors_by_k):
+    errors_by_k
+    return
+
+
+@app.cell
+def _(Nds, data, opt_params, sensors, trad_localize):
+    trad_localize(data, 3, sensors, opt_params, Nds)
+    return
 
 
 @app.cell(hide_code=True)
@@ -2074,9 +2135,15 @@ def _(mo):
 
 
 @app.cell
-def _(calculate_errors, data, opt_params, sensors, trad_localize):
+def _(bkg_avg, np):
+    Nds_test = (2.326*np.sqrt(bkg_avg)) + bkg_avg
+    return
+
+
+@app.cell
+def _(Nds, calculate_errors, data, opt_params, sensors, trad_localize):
     # do traditional localization
-    xy_trad_preds = [trad_localize(data, exp, sensors, opt_params) for exp in range(data.shape[0])]
+    xy_trad_preds = [trad_localize(data, exp, sensors, opt_params, Nds) for exp in range(data.shape[0])]
 
     # put results into data frame
     data_trad = data.copy()
@@ -2090,8 +2157,32 @@ def _(calculate_errors, data, opt_params, sensors, trad_localize):
 
 
 @app.cell
+def _(data_trad, np):
+    np.mean(data_trad["error"])
+    return
+
+
+@app.cell
+def _(data_trad, np):
+    np.mean(data_trad["error"])
+    return
+
+
+@app.cell
+def _(data_trad, np):
+    np.mean(data_trad["error"])
+    return
+
+
+@app.cell
+def _(ids_wrong):
+    ids_wrong
+    return
+
+
+@app.cell
 def _(data_trad):
-    data_trad[data_trad["error"]>20]
+    data_trad[data_trad["x_s_pred"].isnull()]
     return
 
 
@@ -2112,9 +2203,9 @@ def _(mo):
 
 
 @app.cell
-def _(np, select_top_three_sensors, sensor_to_loc):
+def _(Nds, np, sensor_to_loc):
     def dumb_triangulation(data, exp, sensors, opt_params):
-        game_sensors = select_top_three_sensors(data, exp, sensors)
+        game_sensors = select_top_three_sensors(data, exp, sensors, Nds)
         wts = data.loc[exp, game_sensors] / data.loc[exp, game_sensors].sum()
         return np.sum([np.array(sensor_to_loc[sensor]) * wts[sensor] for sensor in game_sensors], axis=0)
 
@@ -2166,7 +2257,7 @@ def _(mo):
 @app.cell
 def _(data, data_trad, viz_source_locs):
     _ids_sources_to_viz = data_trad.index[data_trad["error"] > 20.0]
-    viz_source_locs(data, ids=_ids_sources_to_viz)
+    viz_source_locs(data, ids=_ids_sources_to_viz, savename="high_err_locs.pdf")
     _ids_sources_to_viz
     return
 
@@ -2775,11 +2866,12 @@ def _(np):
 
 
 @app.cell
-def _(np, plot_data, plt):
+def _(data_loo, np, plt):
     def plot_err_vs_std(data_loo, n_std=1, exclude_outlier = False):
         avg_std = []
-        for exp in range(len(data_loo)+1):
-            if exclude_outlier:
+        if exclude_outlier:
+            for exp in range(len(data_loo)+1):
+        
                 if exp != 64:
                     xs_preds = np.array([xs[0] for xs in data_loo.loc[exp, "ensemble pred source locs"]])
                     ys_preds = np.array([xs[1] for xs in data_loo.loc[exp, "ensemble pred source locs"]])
@@ -2787,21 +2879,22 @@ def _(np, plot_data, plt):
                     pearson = cov[0, 1]/np.sqrt(cov[0, 0] * cov[1, 1])
                     # Using a special case to obtain the eigenvalues of this
                     # two-dimensional dataset.
-        
+
                     # Calculating the standard deviation of x from
                     # the squareroot of the variance and multiplying
                     # with the given number of standard deviations.
                     x_std = np.sqrt(cov[0, 0]) * n_std
                     y_std = np.sqrt(cov[1, 1]) * n_std
                     avg_std.append((x_std+y_std)/2)
-            else:
+        else:
+            for exp in range(len(data_loo)):
                     xs_preds = np.array([xs[0] for xs in data_loo.loc[exp, "ensemble pred source locs"]])
                     ys_preds = np.array([xs[1] for xs in data_loo.loc[exp, "ensemble pred source locs"]])
                     cov = np.cov(xs_preds, ys_preds)
                     pearson = cov[0, 1]/np.sqrt(cov[0, 0] * cov[1, 1])
                     # Using a special case to obtain the eigenvalues of this
                     # two-dimensional dataset.
-        
+
                     # Calculating the standard deviation of x from
                     # the squareroot of the variance and multiplying
                     # with the given number of standard deviations.
@@ -2819,6 +2912,14 @@ def _(np, plot_data, plt):
         plt.xlabel("STD of Trees (in)")
         plt.ylabel("LOOCV prediction error (in)")
     
+        plt.text(
+            0.97, 0.95,
+            f"Fit = {a:.2g}*std - {np.abs(b):.2g}",
+            transform=plt.gca().transAxes,
+            ha="right", va="top",
+            bbox=dict(boxstyle="round,pad=0.3", facecolor="white", edgecolor="gray", alpha=0.8)
+        )
+
         # Equal axes with 0,0 minimum and square aspect ratio
         ax_max = int(np.max([np.max(avg_std), np.max(error)])) + 1
         plt.xlim(0, ax_max)
@@ -2827,11 +2928,11 @@ def _(np, plot_data, plt):
         plt.xticks(range(0,20,5))
         plt.gca().set_aspect('equal', adjustable='box')
         plt.gcf().set_size_inches(6, 6)
-    
+
         plt.savefig("err_by_std.pdf", format="pdf", bbox_inches='tight')
         plt.show()
         return
-    plot_err_vs_std(plot_data, exclude_outlier = True)
+    plot_err_vs_std(data_loo, exclude_outlier = False)
     return
 
 
