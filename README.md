@@ -10,6 +10,8 @@ forward model data: Contains raw csv's of the detector array outputs for each ex
 
 Background_for_localization_model.csv: background data used for source presence classifier
 
+k_optimization_10-30.csv, k_optimization_17-22.csv, and k_optimization_19-22.csv contain the errors for varying k-sigma values used for finding the optimal threshold for multileteration sensor selection.
+
 ## code
-model_analysis.py has the most uptodat data processing and figures.
+model_analysis.py has the most up-to-date data processing and figures.
 see the marimo notebook to be run in Python.
