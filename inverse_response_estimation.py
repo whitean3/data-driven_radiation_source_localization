@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.17.7"
+__generated_with = "0.23.9"
 app = marimo.App(width="medium")
 
 
@@ -27,6 +27,7 @@ def _():
 
     from sklearn.ensemble import ExtraTreesClassifier, ExtraTreesRegressor, IsolationForest
     from sklearn.model_selection import LeaveOneOut, train_test_split
+
     return (
         ConfusionMatrixDisplay,
         Ellipse,
@@ -181,6 +182,7 @@ def _(csv, n_sensors, pd):
             df = df[start:]
 
             return df
+
     return (read_detector_outputs,)
 
 
@@ -403,6 +405,7 @@ def _(box_dims, patches, thing_to_color):
                 label=mat[r]
             )
             ax.add_patch(rectangle)
+
     return (draw_obstacles,)
 
 
@@ -699,6 +702,7 @@ def _(ExtraTreesRegressor, LeaveOneOut, np, sensors):
         )
 
         return data_loo
+
     return (do_loo_cv,)
 
 
@@ -769,34 +773,34 @@ def _(box_dims, data_loo, plt):
         plt.subplots_adjust(wspace=0.3)
         for ax in [ax1, ax2]:
             ax.set_aspect('equal', 'box')
-    
+
         ax1.set_xlim(0, box_dims[0])
         ax1.set_ylim(0, box_dims[0])
         ax2.set_xlim(0, box_dims[1])
         ax2.set_ylim(0, box_dims[1])
-    
+
         ax1.set_xticks([0, 10, 20, 30, 40])
         ax1.set_yticks([0, 10, 20, 30, 40])
-    
+
         ax2.set_xticks([0, 5, 10, 15, 20, 25, 30])
         ax2.set_yticks([0, 5, 10, 15, 20, 25, 30])
-    
+
         ax1.set_xlabel("x$_s$ [in]")
         ax2.set_xlabel("y$_s$ [in]")
         ax1.set_ylabel("predicted x$_s$ [in]")
         ax2.set_ylabel("predicted y$_s$ [in]")
-    
+
         ax1.plot([0, box_dims[0]], [0, box_dims[0]], color="black", linestyle="--")
         ax2.plot([0, box_dims[1]], [0, box_dims[1]], color="black", linestyle="--")
-    
+
         ax1.scatter(data["x_s"], data["x_s_pred"], clip_on=False)
         ax2.scatter(data["y_s"], data["y_s_pred"], clip_on=False)
-    
+
         x_err = data["error_x"].mean()
         y_err = data["error_y"].mean()
         ax1.legend(title=f"error = {x_err:.2f} in")
         ax2.legend(title=f"error = {y_err:.2f} in")
-    
+
         plt.show()
     xy_parity_plot(data_loo)
     return (xy_parity_plot,)
@@ -898,6 +902,7 @@ def _(Ellipse, np, transforms):
 
         ellipse.set_transform(transf + ax.transData)
         return ax.add_patch(ellipse)
+
     return (draw_confidence_ellipse,)
 
 
@@ -994,6 +999,7 @@ def _(ExtraTreesRegressor, sensors):
         tree_ensemble = ExtraTreesRegressor(n_estimators=n_estimators)
         tree_ensemble.fit(sensor_network_readout, source_locs)
         return tree_ensemble
+
     return (train_tree_ensemble,)
 
 
@@ -1317,11 +1323,13 @@ def _(ExtraTreesClassifier, LeaveOneOut, data, np, sensors):
             safety_pred = tree_ensemble.predict(sensor_network_readout_test)[0]
 
             # store prediction on test network readout.
+            data_loo["pred_safe"] = data_loo["pred_safe"].astype(object)
             data_loo.loc[test_index, "pred_safe"] = safety_pred
 
         data_loo["agreement"] = data_loo["background"] == data_loo["pred_safe"]
 
         return data_loo
+
     return (do_loo_cv_classification,)
 
 
@@ -1523,6 +1531,7 @@ def _(IsolationForest, pd, plt, sensors, sns, train_test_split):
         # plt.axvline(iso_f.offset_, color="gray", linestyle="--", zorder=1)
         plt.show()
         return adata
+
     return (train_test_anomaly_detection,)
 
 
@@ -1634,6 +1643,7 @@ def _(mo):
 @app.cell
 def _():
     import scipy.optimize as optimize
+
     return (optimize,)
 
 
@@ -1650,6 +1660,7 @@ def _(np):
 
         N = (S*0.3*omega)/(4*np.pi) + 12
         return N
+
     return (response_fun,)
 
 
@@ -1742,6 +1753,7 @@ def _(get_x_for_y, np):
         # Convert to numpy array (filtering out None values if needed)
         x_array = np.array([x for x in x_results if x is not None])
         return x_array
+
     return (response_to_dist,)
 
 
@@ -1798,6 +1810,7 @@ def _(np, response_to_dist, sensor_to_loc):
             bounds=[(0.0, 42.0), (0.0, 33.0)],
         )
         return result
+
     return (predict_loc_LSE,)
 
 
@@ -2095,6 +2108,7 @@ def _(np):
         # Solve H * delta ~= (Y - h(phi0)) in least squares sense (more stable than normal equations)
         delta, *_ = np.linalg.lstsq(H, (Y - h_phi0), rcond=None)
         return phi_0 + delta.flatten()
+
     return (nlls_loc,)
 
 
