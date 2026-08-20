@@ -765,7 +765,7 @@ def _(data, data_bkg, matplotlib, np, plt, sensor_to_nice_int, sensors, sns):
                     'edgecolor': 'white',   # Adds the white outline
                 },
                 diag_kws={'bins': bins, 'color': "black", 'alpha': 0.7},
-            
+
             )
 
         g.figure.text(0.5, -0.01, 'sensor (CPS)', ha='center', va='bottom', fontsize=30)
@@ -778,11 +778,11 @@ def _(data, data_bkg, matplotlib, np, plt, sensor_to_nice_int, sensors, sns):
         for i, sensor_i in enumerate(sensors):
             for j, sensor_j in enumerate(sensors):
                 ax = g.axes[i, j]
-            
+
                 if ax is not None:    
                     ax.set_xscale('log')
                     ax.set_yscale('log')
-                
+
                     ax.set_xlim(padded_min, padded_max)
                     if i != j:  # Only set Y limits on the off-diagonal scatter plots
                         ax.set_ylim(padded_min, padded_max)
@@ -813,8 +813,8 @@ def _(data, data_bkg, matplotlib, np, plt, sensor_to_nice_int, sensors, sns):
 
         bkg_handle = matplotlib.lines.Line2D([], [], color='forestgreen', marker='+', 
                                    markersize=10, linestyle='None', label='source absent')
-    
-    
+
+
         # --- 3. Draw the Legend on the Figure ---
         # We place it slightly higher than the colorbar (e.g., bottom at 0.60) in the empty space
         g.figure.legend(
@@ -2102,15 +2102,15 @@ def _(bkg_avg, data, errors_by_k, np, opt_params, sensors, trad_localize):
                         [xy_trad_preds[exp][1] for exp in range(data.shape[0])]) ** 2)
                 )
             )
-        
+
         return avg_errs
 
-    return (optimize_Nds,)
+    return
 
 
 @app.cell
-def _(optimize_Nds):
-    optimize_Nds()
+def _():
+    #optimize_Nds()
     return
 
 
@@ -2475,6 +2475,12 @@ def _(n_tracks, read_all_data):
 
 
 @app.cell
+def _(n_tracks, read_all_data):
+    tracking_outputs_15s = read_all_data(n_tracks, lambda exp: f"tracking 15s/tracking_15s_{exp+1}.csv")
+    return (tracking_outputs_15s,)
+
+
+@app.cell
 def _(box_dims, pd):
     tracking_locs = pd.DataFrame(
         {
@@ -2495,6 +2501,12 @@ def _(make_data_nice, tracking_locs, tracking_outputs):
 
 
 @app.cell
+def _(make_data_nice, tracking_locs, tracking_outputs_15s):
+    tracking_15s_data = make_data_nice(tracking_outputs_15s, tracking_locs)
+    return (tracking_15s_data,)
+
+
+@app.cell
 def _(tracking_data, viz_source_locs):
     viz_source_locs(tracking_data)
     return
@@ -2511,7 +2523,13 @@ def _(sensors, tracking_data, tree_ensemble):
         return tracking_data_pred
 
     tracking_data_pred = predict_track(tracking_data, tree_ensemble)
-    return (tracking_data_pred,)
+    return predict_track, tracking_data_pred
+
+
+@app.cell
+def _(predict_track, tracking_15s_data, tree_ensemble):
+    tracking_15s_data_pred = predict_track(tracking_15s_data, tree_ensemble)
+    return (tracking_15s_data_pred,)
 
 
 @app.cell
@@ -2541,6 +2559,28 @@ def _(np, sensors, tracking_data, tree_ensemble):
         # Use .at instead of .loc for storing arrays in individual cells
         tracking_data.at[test_index, "ensemble pred source locs"] = predictions
     return (test_index,)
+
+
+@app.cell
+def _(np, sensors, tracking_15s_data, tree_ensemble):
+    def _():
+        # Initialize column with object dtype ONCE before the loop
+        tracking_15s_data["ensemble pred source locs"] = np.empty(len(tracking_15s_data), dtype=object)
+
+        for test_index in range(len(tracking_15s_data)):
+            sensor_network_readout_test = tracking_15s_data.loc[test_index, sensors]
+
+            predictions = np.array(
+                [tree.predict(sensor_network_readout_test.to_frame().T)[0] for tree in tree_ensemble.estimators_]
+            )
+
+            # Use .at instead of .loc for storing arrays in individual cells
+            tracking_15s_data.at[test_index, "ensemble pred source locs"] = predictions
+        return
+
+
+    _()
+    return
 
 
 @app.cell
@@ -2720,10 +2760,9 @@ def _(
     sensors,
     setup_environment,
     thing_to_color,
-    tracking_data,
     viz_sensor_locs,
 ):
-    def viz_track(tracking_data_pred, sensor_to_loc):
+    def viz_track(_tracking_data, tracking_data_pred, sensor_to_loc):
         max_response = 75.0 
 
         fig, ax = setup_environment(box_dims)
@@ -2754,9 +2793,9 @@ def _(
         )
 
 
-        for exp in range(len(tracking_data)):
-            xs_preds = np.array([xs[0] for xs in tracking_data.loc[exp, "ensemble pred source locs"]])
-            ys_preds = np.array([xs[1] for xs in tracking_data.loc[exp, "ensemble pred source locs"]])
+        for exp in range(len(_tracking_data)):
+            xs_preds = np.array([xs[0] for xs in _tracking_data.loc[exp, "ensemble pred source locs"]])
+            ys_preds = np.array([xs[1] for xs in _tracking_data.loc[exp, "ensemble pred source locs"]])
 
             draw_confidence_ellipse(xs_preds, ys_preds, ax, facecolor=thing_to_color["pred source loc"], alpha=0.15, n_std=1)
             #plot_ensemble_kde(ax, combined, bw_method='scott', cmap="YlGn", alpha_fill=0.01)
@@ -2789,8 +2828,14 @@ def _(
 
 
 @app.cell
-def _(sensor_to_loc, tracking_data_pred, viz_track):
-    viz_track(tracking_data_pred, sensor_to_loc)
+def _(sensor_to_loc, tracking_data, tracking_data_pred, viz_track):
+    viz_track(tracking_data, tracking_data_pred, sensor_to_loc)
+    return
+
+
+@app.cell
+def _(sensor_to_loc, tracking_15s_data, tracking_15s_data_pred, viz_track):
+    viz_track(tracking_15s_data, tracking_15s_data_pred, sensor_to_loc)
     return
 
 
@@ -2871,7 +2916,7 @@ def _(data_loo, np, plt):
         avg_std = []
         if exclude_outlier:
             for exp in range(len(data_loo)+1):
-        
+
                 if exp != 64:
                     xs_preds = np.array([xs[0] for xs in data_loo.loc[exp, "ensemble pred source locs"]])
                     ys_preds = np.array([xs[1] for xs in data_loo.loc[exp, "ensemble pred source locs"]])
@@ -2911,7 +2956,7 @@ def _(data_loo, np, plt):
         plt.plot(range(0, 20), a * range(0, 20) + b, linestyle="dashed", color='black')
         plt.xlabel("STD of Trees (in)")
         plt.ylabel("LOOCV prediction error (in)")
-    
+
         plt.text(
             0.97, 0.95,
             f"Fit = {a:.2g}*std - {np.abs(b):.2g}",
@@ -2933,6 +2978,139 @@ def _(data_loo, np, plt):
         plt.show()
         return
     plot_err_vs_std(data_loo, exclude_outlier = False)
+    return
+
+
+@app.cell
+def _(csv, pd):
+    def read_variance_outputs(file_path):
+        with open(file_path, 'r') as file:
+            csv_reader = csv.reader(file, delimiter=',')
+            rows = []
+            header = next(csv_reader)  # Read header separately
+
+            # Create new header: keep first 6 columns and remove the rest
+            new_header = header[:6]
+
+            for row in csv_reader:
+                # Take first 5 columns as is
+                new_row = row[:6]
+                # Convert columns 6 through 1029 into a vector and store in 6th position
+                vector = [float(x) for x in row[5:1029]]
+                new_row[5] = vector
+                rows.append(new_row)
+
+            df = pd.DataFrame(rows, columns=new_header)
+
+            return df
+
+    return (read_variance_outputs,)
+
+
+@app.cell
+def _(folder_path, n_sensors, os, read_variance_outputs):
+    def read_variance_data(n_expts, exp_to_filename):
+        dataframes = {}
+
+        for exp in range(n_expts):
+            filename = exp_to_filename(exp)
+            file_path = os.path.join(folder_path, filename)
+            print(f"\nReading {filename}...")
+            # Use the filename (or file_path) as the key
+            dataframes[exp] = read_variance_outputs(file_path)
+
+            # unique sensors
+            assert dataframes[exp]["SN"].nunique() == n_sensors
+        return dataframes
+
+
+    return (read_variance_data,)
+
+
+@app.cell
+def _(read_variance_data):
+    variance_outputs = read_variance_data(25, lambda exp: f"Variance Study/Variance_{exp+1}.csv")
+    return (variance_outputs,)
+
+
+@app.cell
+def _(variance_outputs):
+    variance_outputs
+    return
+
+
+@app.cell
+def _(np, pd):
+    def reorganize_by_sn(df_list):
+        valid_dfs = [df for df in df_list if isinstance(df, pd.DataFrame)]
+    
+        if not valid_dfs:
+            raise ValueError(f"No valid DataFrames found. Got types: {[type(x) for x in df_list]}")
+    
+        # Cast ICR to numeric in all dataframes
+        valid_dfs = [df.assign(ICR=pd.to_numeric(df['ICR'], errors='coerce')) for df in valid_dfs]
+
+        all_sns = sorted(pd.concat([df['SN'] for df in valid_dfs]).unique())
+        n_positions = len(valid_dfs)
+    
+        sn_data = {sn: [] for sn in all_sns}
+    
+        for pos_idx, df in enumerate(valid_dfs):
+            for sn in all_sns:
+                icr_values = df[df['SN'] == sn]['ICR'].values
+                sn_data[sn].append(icr_values)
+    
+        sn_dfs = {}
+        for sn, position_icrs in sn_data.items():
+            sn_dfs[sn] = pd.DataFrame(
+                np.array(position_icrs).T,
+                columns=[f'region_{i+1}' for i in range(n_positions)]
+            )
+    
+        return sn_dfs
+
+
+    def compute_variance_stats(sn_dfs):
+        records = []
+        for sn, df in sn_dfs.items():
+            # Ensure numeric dtype (belt-and-suspenders)
+            df = df.apply(pd.to_numeric, errors='coerce')
+            for col in df.columns:
+                vals = df[col].dropna()
+                records.append({
+                    'SN':       sn,
+                    'Position': col,
+                    'Mean':     vals.mean(),
+                    'Std':      vals.std(),
+                    'Variance': vals.var(),
+                    'CV%':      (vals.std() / vals.mean() * 100) if vals.mean() != 0 else np.nan
+                })
+        return pd.DataFrame(records)
+
+    return compute_variance_stats, reorganize_by_sn
+
+
+@app.cell
+def _(reorganize_by_sn, variance_outputs):
+    var_data = reorganize_by_sn(list(variance_outputs.values()))
+    return (var_data,)
+
+
+@app.cell
+def _(var_data):
+    var_data
+    return
+
+
+@app.cell
+def _(compute_variance_stats, var_data):
+    variance_stats = compute_variance_stats(var_data)
+    return (variance_stats,)
+
+
+@app.cell
+def _(variance_stats):
+    variance_stats
     return
 
 
