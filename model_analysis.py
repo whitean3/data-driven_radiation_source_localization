@@ -321,6 +321,22 @@ def _(data, np, sensors):
     return
 
 
+@app.cell
+def _(data):
+    data_B1 = data.loc[range(25)]
+    data_B2 = data.loc[range(25,50)]
+    data_B3 = data.loc[range(50,75)]
+    data_B4 = data.loc[range(75,100)]
+    return data_B1, data_B2, data_B3
+
+
+@app.cell
+def _(data_B1, data_B2, data_B3, pd):
+    data_12 = pd.concat([data_B1,data_B2], ignore_index=True)
+    data_13 = pd.concat([data_B1,data_B3], ignore_index=True)
+    return
+
+
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
@@ -1011,6 +1027,84 @@ def _(data, do_loo_cv, don_run_loo_cv):
         data_loo = do_loo_cv(data)
     data_loo
     return (data_loo,)
+
+
+@app.cell
+def _(ExtraTreesRegressor, box_dims, calculate_errors, np, sensors):
+    def do_block_cv(
+        data, test_data, n_estimators=250, verbose=True, very_verbose=False, delta_modeling=False, uq=True
+    ):
+        target_prepend = "delta_" if delta_modeling else ""  # handle delta modeling
+    
+        # Train on the full training data
+        sensor_network_readout_train = data[sensors]
+        source_locs_train = data[[target_prepend + "x_s", target_prepend + "y_s"]]
+    
+        if verbose:
+            print("Training tree ensemble on full training set...")
+    
+        tree_ensemble = ExtraTreesRegressor(n_estimators=n_estimators)
+        tree_ensemble.fit(sensor_network_readout_train, source_locs_train)
+    
+        # Fix feature names on individual trees (suppresses warning)
+        for tree in tree_ensemble.estimators_:
+            tree.feature_names_in_ = tree_ensemble.feature_names_in_
+    
+        # Prepare test data output frame
+        data_test = test_data.copy()
+        data_test[target_prepend + "x_s_pred"] = np.zeros(len(data_test))
+        data_test[target_prepend + "y_s_pred"] = np.zeros(len(data_test))
+        if uq:
+            data_test[target_prepend + "ensemble pred source locs"] = [
+                np.zeros(n_estimators) for _ in range(len(data_test))
+            ]
+    
+        # Predict on each test point
+        for i, test_index in enumerate(data_test.index):
+            if verbose:
+                print("test point :", i, " / ", len(data_test))
+                if very_verbose:
+                    print("\ttest expt: ", test_index)
+        
+            sensor_network_readout_test = data_test.loc[[test_index], sensors]
+            source_locs_test_pred = tree_ensemble.predict(sensor_network_readout_test)[0]
+        
+            # Store mean prediction
+            data_test.loc[test_index, target_prepend + "x_s_pred"] = source_locs_test_pred[0]
+            data_test.loc[test_index, target_prepend + "y_s_pred"] = source_locs_test_pred[1]
+        
+            # Store per-tree predictions for UQ
+            if uq:
+                data_test.loc[test_index, target_prepend + "ensemble pred source locs"] = [
+                    np.array(
+                        [tree.predict(sensor_network_readout_test)[0] for tree in tree_ensemble.estimators_]
+                    )
+                ]
+    
+        if delta_modeling:
+            for ii, xy in enumerate(["x", "y"]):
+                data_test[xy + "_s_pred"] = data_test[f"{xy}_s_LS_pred"] + data_test[f"delta_{xy}_s_pred"]
+                data_test[xy + "_s_pred"] = data_test[xy + "_s_pred"].apply(lambda x: max(0, x))
+                data_test[xy + "_s_pred"] = data_test[xy + "_s_pred"].apply(lambda x: min(box_dims[ii], x))
+    
+        calculate_errors(data_test)
+        return data_test
+
+    return
+
+
+@app.cell
+def _(data_B1, do_loo_cv):
+    data_loo_B1 = do_loo_cv(data_B1)
+    return
+
+
+app._unparsable_cell(
+    r"""
+    data_loo_B12 = 
+    """,
+    name="_"
+)
 
 
 @app.cell(hide_code=True)
@@ -3043,30 +3137,30 @@ def _(variance_outputs):
 def _(np, pd):
     def reorganize_by_sn(df_list):
         valid_dfs = [df for df in df_list if isinstance(df, pd.DataFrame)]
-    
+
         if not valid_dfs:
             raise ValueError(f"No valid DataFrames found. Got types: {[type(x) for x in df_list]}")
-    
+
         # Cast ICR to numeric in all dataframes
         valid_dfs = [df.assign(ICR=pd.to_numeric(df['ICR'], errors='coerce')) for df in valid_dfs]
 
         all_sns = sorted(pd.concat([df['SN'] for df in valid_dfs]).unique())
         n_positions = len(valid_dfs)
-    
+
         sn_data = {sn: [] for sn in all_sns}
-    
+
         for pos_idx, df in enumerate(valid_dfs):
             for sn in all_sns:
                 icr_values = df[df['SN'] == sn]['ICR'].values
                 sn_data[sn].append(icr_values)
-    
+
         sn_dfs = {}
         for sn, position_icrs in sn_data.items():
             sn_dfs[sn] = pd.DataFrame(
                 np.array(position_icrs).T,
                 columns=[f'region_{i+1}' for i in range(n_positions)]
             )
-    
+
         return sn_dfs
 
 
