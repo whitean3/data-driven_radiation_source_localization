@@ -327,14 +327,14 @@ def _(data):
     data_B2 = data.loc[range(25,50)]
     data_B3 = data.loc[range(50,75)]
     data_B4 = data.loc[range(75,100)]
-    return data_B1, data_B2, data_B3
+    return data_B1, data_B2, data_B3, data_B4
 
 
 @app.cell
 def _(data_B1, data_B2, data_B3, pd):
-    data_12 = pd.concat([data_B1,data_B2], ignore_index=True)
-    data_13 = pd.concat([data_B1,data_B3], ignore_index=True)
-    return
+    data_B12 = pd.concat([data_B1,data_B2], ignore_index=True)
+    data_B13 = pd.concat([data_B1,data_B3], ignore_index=True)
+    return data_B12, data_B13
 
 
 @app.cell(hide_code=True)
@@ -1090,21 +1090,25 @@ def _(ExtraTreesRegressor, box_dims, calculate_errors, np, sensors):
         calculate_errors(data_test)
         return data_test
 
-    return
+    return (do_block_cv,)
 
 
 @app.cell
-def _(data_B1, do_loo_cv):
-    data_loo_B1 = do_loo_cv(data_B1)
-    return
+def _(data_B1, data_B4, do_block_cv):
+    data_cv_B1 = do_block_cv(data_B1, data_B4)
+    return (data_cv_B1,)
 
 
-app._unparsable_cell(
-    r"""
-    data_loo_B12 = 
-    """,
-    name="_"
-)
+@app.cell
+def _(data_B12, data_B4, do_block_cv):
+    data_cv_B12 =  do_block_cv(data_B12, data_B4)
+    return (data_cv_B12,)
+
+
+@app.cell
+def _(data_B13, data_B4, do_block_cv):
+    data_cv_B13 = do_block_cv(data_B13,data_B4)
+    return (data_cv_B13,)
 
 
 @app.cell(hide_code=True)
@@ -1182,6 +1186,66 @@ def _(box_dims, data_loo, plt):
         plt.show()
 
     xy_parity_plot(data_loo)
+    return (xy_parity_plot,)
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    #### Trained on batch 1 and tested on batch 4
+    """)
+    return
+
+
+@app.cell
+def _(data_cv_B1, xy_parity_plot):
+    xy_parity_plot(data_cv_B1)
+    return
+
+
+@app.cell
+def _(data_cv_B1, np):
+    np.mean(data_cv_B1['error'])
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    #### Trained on batch 1 and 2 and tested on batch 4
+    """)
+    return
+
+
+@app.cell
+def _(data_cv_B12, xy_parity_plot):
+    xy_parity_plot(data_cv_B12)
+    return
+
+
+@app.cell
+def _(data_cv_B12, np):
+    np.mean(data_cv_B12['error'])
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    #### Trained on batch 1 and 3 and tested on batch 4
+    """)
+    return
+
+
+@app.cell
+def _(data_cv_B13, xy_parity_plot):
+    xy_parity_plot(data_cv_B13)
+    return
+
+
+@app.cell
+def _(data_cv_B13, np):
+    np.mean(data_cv_B13['error'])
     return
 
 
