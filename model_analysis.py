@@ -21,6 +21,7 @@ def _():
     from scipy.optimize import root_scalar, minimize, differential_evolution
     from sklearn.metrics import ConfusionMatrixDisplay
     from sklearn.metrics import RocCurveDisplay, roc_curve, auc
+    from sklearn.inspection import permutation_importance
     from sklearn.metrics import precision_recall_curve, average_precision_score
     import scipy.optimize as optimize
     import matplotlib as mpl
@@ -942,28 +943,24 @@ def _(np):
 
 
 @app.cell
-def _(
-    ExtraTreesRegressor,
-    LeaveOneOut,
-    box_dims,
-    calculate_errors,
-    np,
-    sensors,
-):
+def _():
+    return
+
+
+@app.cell
+def _(ExtraTreesRegressor, LeaveOneOut, calculate_errors, np, sensors):
     # a multi-output tree ensemble model. maps 8D vectors to 2D vectors.
     #  maps sensor network readout to source location
     def do_loo_cv(
-        data, n_estimators=250, verbose=True, very_verbose=False, delta_modeling=False, uq=True
+        data, n_estimators=250, verbose=True, very_verbose=False, uq=True
     ):
-        target_prepend = "delta_" if delta_modeling else "" # handle delta modeling
-
         data_loo = data.copy()
         # store predicted source locations in data frame.
         #  ok bc each data point is test point ONCE.
-        data_loo[target_prepend + "x_s_pred"] = np.zeros((len(data)))
-        data_loo[target_prepend + "y_s_pred"] = np.zeros((len(data)))
+        data_loo["x_s_pred"] = np.zeros((len(data)))
+        data_loo["y_s_pred"] = np.zeros((len(data)))
         if uq:
-            data_loo[target_prepend + "ensemble pred source locs"] = [np.zeros(n_estimators) for _ in range(len(data_loo))]
+            data_loo["ensemble pred source locs"] = [np.zeros(n_estimators) for _ in range(len(data_loo))]
 
         loo = LeaveOneOut()
         for i, (_train_index, _test_index) in enumerate(loo.split(data_loo)):
@@ -982,7 +979,7 @@ def _(
 
             # build X_train, y_train
             sensor_network_readout = data_loo.loc[train_index, sensors]
-            source_locs = data_loo.loc[train_index, [target_prepend + "x_s", target_prepend + "y_s"]]
+            source_locs = data_loo.loc[train_index, ["x_s", "y_s"]]
 
             # train tree ensemble on training data
             tree_ensemble = ExtraTreesRegressor(n_estimators=n_estimators)
@@ -996,33 +993,24 @@ def _(
             source_locs_test_pred = tree_ensemble.predict(sensor_network_readout_test)[0]
 
             # store prediction of source location on test network readout.
-            data_loo.loc[test_index, target_prepend + "x_s_pred"] = source_locs_test_pred[0]
-            data_loo.loc[test_index, target_prepend + "y_s_pred"] = source_locs_test_pred[1]
+            data_loo.loc[test_index, "x_s_pred"] = source_locs_test_pred[0]
+            data_loo.loc[test_index, "y_s_pred"] = source_locs_test_pred[1]
 
             # also store predictions by each tree for UQ
             for tree in tree_ensemble.estimators_: # back to suppress warning
                 tree.feature_names_in_ = tree_ensemble.feature_names_in_
 
             if uq:
-                data_loo.loc[test_index, target_prepend + "ensemble pred source locs"] = [
+                data_loo.loc[test_index, "ensemble pred source locs"] = [
                     np.array(
                         [tree.predict(sensor_network_readout_test)[0] for tree in tree_ensemble.estimators_]
                     )
                 ]
 
-        if delta_modeling:
-            for ii, xy in enumerate(["x", "y"]):
-                # the prediction is really LS pred plus the delta
-                data_loo[xy + "_s_pred"] = data_loo[f"{xy}_s_LS_pred"] + data_loo[f"delta_{xy}_s_pred"]
-                # avoid going outside the box
-                data_loo[xy + "_s_pred"] = data_loo[xy + "_s_pred"].apply(lambda x: max(0, x))
-                data_loo[xy + "_s_pred"] = data_loo[xy + "_s_pred"].apply(lambda x: min(box_dims[ii], x))
-
         # DONE! compute and store error = distance from true to predicted source
         calculate_errors(data_loo)
 
         return data_loo
-
     return (do_loo_cv,)
 
 
