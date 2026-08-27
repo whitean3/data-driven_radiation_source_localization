@@ -563,6 +563,8 @@ def _(
                 ha='left',
                 va='bottom'
             )
+        plt.hlines([33-8.5,33-14.5,33-20.5,33-26.5], xmin=0, xmax=42)
+        plt.vlines([9.5,17.5,25.5,33.5],ymin=0,ymax=33)
         # legend w unique entries
         handles, labels = plt.gca().get_legend_handles_labels()
         by_label = dict(zip(labels, handles))
