@@ -1315,7 +1315,7 @@ def _(
         plt.show()
 
     explain_errors(data_loo)
-    return
+    return (explain_errors,)
 
 
 @app.cell
@@ -3118,47 +3118,8 @@ def _(read_variance_data):
 
 
 @app.cell
-def _(box_dims, pd):
-    region_locs = pd.DataFrame(
-        {
-            'x_s': [3.5, 13.5, 21.5, 29.5, 37.5, 3.5, 13.5, 21.5, 29.5, 37.5, 3.5, 13.5, 21.5, 29.5, 37.5, 3.5, 13.5, 21.5, 29.5, 37.5, 3.5, 13.5, 21.5, 29.5, 37.5],
-            'y_s': [3.5, 3.5, 3.5, 3.5, 3.5, 11, 11, 11, 11, 11, 17.5, 17.5, 17.5, 17.5, 17.5, 23.5, 23.5, 23.5, 23.5, 23.5, 29.5, 29.5, 29.5, 29.5, 29.5]
-        }
-    )
-    region_locs["y_s"] = box_dims[1] - region_locs["y_s"] # translate so that origin in bottom left
-    region_locs
-    return (region_locs,)
-
-
-@app.cell
 def _(variance_outputs):
     variance_outputs
-    return
-
-
-@app.function
-def grab_sensor_response_var(detector_output, sensor):
-    readings = detector_output.loc[detector_output["SN"] == sensor, "ICR"]
-    return float(readings.astype(float).mean())
-
-
-@app.cell
-def _(pd, region_locs, sensors, variance_outputs):
-    def make_var_data_nice(variance_outputs, region_locs):
-        data = pd.DataFrame(columns=sensors)
-    
-        for exp_idx, df in variance_outputs.items():
-            # Average ICR across all measurements for each sensor
-            new_row = {
-                sensor: grab_sensor_response_var(df, sensor) 
-                for sensor in sensors
-            }
-            data.loc[exp_idx] = new_row
-    
-        data = data.sort_index()
-        data = pd.concat([region_locs.reset_index(drop=True), data.reset_index(drop=True)], axis=1)
-        return data
-    nice_var_data = make_var_data_nice(variance_outputs, region_locs)
     return
 
 
@@ -3246,6 +3207,92 @@ def _(variance_stats):
 @app.cell
 def _(averaged_positional_stats):
     averaged_positional_stats
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Region block cross-validation
+    """)
+    return
+
+
+@app.function
+def grab_sensor_response_var(detector_output, sensor):
+    readings = detector_output.loc[detector_output["SN"] == sensor, "ICR"]
+    return float(readings.astype(float).mean())
+
+
+@app.cell
+def _(box_dims, pd):
+    region_locs = pd.DataFrame(
+        {
+            'x_s': [3.5, 13.5, 21.5, 29.5, 37.5, 3.5, 13.5, 21.5, 29.5, 37.5, 3.5, 13.5, 21.5, 29.5, 37.5, 3.5, 13.5, 21.5, 29.5, 37.5, 3.5, 13.5, 21.5, 29.5, 37.5],
+            'y_s': [3.5, 3.5, 3.5, 3.5, 3.5, 11, 11, 11, 11, 11, 17.5, 17.5, 17.5, 17.5, 17.5, 23.5, 23.5, 23.5, 23.5, 23.5, 29.5, 29.5, 29.5, 29.5, 29.5]
+        }
+    )
+    region_locs["y_s"] = box_dims[1] - region_locs["y_s"] # translate so that origin in bottom left
+    region_locs
+    return (region_locs,)
+
+
+@app.cell
+def _(pd, region_locs, sensors, variance_outputs):
+    def make_var_data_nice(variance_outputs, region_locs):
+        rows = []
+    
+        for exp_idx, df in variance_outputs.items():
+            # get number of measurements (rows per sensor)
+            n_measurements = df[df["SN"] == sensors[0]].shape[0]
+        
+            for meas_idx in range(n_measurements):
+                new_row = {"region": exp_idx + 1}
+                new_row["x_s"] = region_locs.iloc[exp_idx]["x_s"]
+                new_row["y_s"] = region_locs.iloc[exp_idx]["y_s"]
+                for sensor in sensors:
+                    sensor_rows = df[df["SN"] == sensor].reset_index(drop=True)
+                    new_row[sensor] = float(sensor_rows.loc[meas_idx, "ICR"])
+                rows.append(new_row)
+    
+        return pd.DataFrame(rows)
+    nice_var_data = make_var_data_nice(variance_outputs, region_locs)
+    return (nice_var_data,)
+
+
+@app.cell
+def _(nice_var_data):
+    nice_var_data
+    return
+
+
+@app.cell
+def _(nice_var_data):
+    nice_var_data.loc[nice_var_data["region"]!=1]
+    return
+
+
+@app.cell
+def _(do_train_test, nice_var_data, pd):
+    def do_region_CV(data):
+        out_df = pd.DataFrame()
+        for region in range(25):
+            new_rows = (do_train_test(nice_var_data.loc[data["region"]!=region+1],nice_var_data.loc[data["region"]==region+1]))
+            out_df = pd.concat([out_df, new_rows], ignore_index=True)
+        return out_df
+    region_data = do_region_CV(nice_var_data)
+    return (region_data,)
+
+
+@app.cell
+def _(region_data):
+    region_data
+    return
+
+
+@app.cell
+def _(explain_errors, region_data):
+    explain_errors(region_data)
     return
 
 
