@@ -943,11 +943,6 @@ def _(np):
 
 
 @app.cell
-def _():
-    return
-
-
-@app.cell
 def _(ExtraTreesRegressor, LeaveOneOut, calculate_errors, np, sensors):
     # a multi-output tree ensemble model. maps 8D vectors to 2D vectors.
     #  maps sensor network readout to source location
@@ -3123,14 +3118,47 @@ def _(read_variance_data):
 
 
 @app.cell
-def _(make_data_niocevariance_outputs):
-    make_data_niocevariance_outputs[1]
-    return
+def _(box_dims, pd):
+    region_locs = pd.DataFrame(
+        {
+            'x_s': [3.5, 13.5, 21.5, 29.5, 37.5, 3.5, 13.5, 21.5, 29.5, 37.5, 3.5, 13.5, 21.5, 29.5, 37.5, 3.5, 13.5, 21.5, 29.5, 37.5, 3.5, 13.5, 21.5, 29.5, 37.5],
+            'y_s': [3.5, 3.5, 3.5, 3.5, 3.5, 11, 11, 11, 11, 11, 17.5, 17.5, 17.5, 17.5, 17.5, 23.5, 23.5, 23.5, 23.5, 23.5, 29.5, 29.5, 29.5, 29.5, 29.5]
+        }
+    )
+    region_locs["y_s"] = box_dims[1] - region_locs["y_s"] # translate so that origin in bottom left
+    region_locs
+    return (region_locs,)
 
 
 @app.cell
-def _(data):
-    data
+def _(variance_outputs):
+    variance_outputs
+    return
+
+
+@app.function
+def grab_sensor_response_var(detector_output, sensor):
+    readings = detector_output.loc[detector_output["SN"] == sensor, "ICR"]
+    return float(readings.astype(float).mean())
+
+
+@app.cell
+def _(pd, region_locs, sensors, variance_outputs):
+    def make_var_data_nice(variance_outputs, region_locs):
+        data = pd.DataFrame(columns=sensors)
+    
+        for exp_idx, df in variance_outputs.items():
+            # Average ICR across all measurements for each sensor
+            new_row = {
+                sensor: grab_sensor_response_var(df, sensor) 
+                for sensor in sensors
+            }
+            data.loc[exp_idx] = new_row
+    
+        data = data.sort_index()
+        data = pd.concat([region_locs.reset_index(drop=True), data.reset_index(drop=True)], axis=1)
+        return data
+    nice_var_data = make_var_data_nice(variance_outputs, region_locs)
     return
 
 
