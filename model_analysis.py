@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.23.9"
+__generated_with = "0.14.9"
 app = marimo.App(width="medium")
 
 
@@ -14,6 +14,7 @@ def _():
     import marimo as mo
     import matplotlib.pyplot as plt
     import matplotlib.patches as patches
+    from matplotlib.lines import Line2D
     import matplotlib
     from matplotlib.patches import Ellipse
     import matplotlib.transforms as transforms
@@ -41,6 +42,7 @@ def _():
         ExtraTreesClassifier,
         ExtraTreesRegressor,
         LeaveOneOut,
+        Line2D,
         auc,
         average_precision_score,
         csv,
@@ -87,7 +89,8 @@ def _(sns):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
+    mo.md(
+        r"""
     # ::icon-park:data:: read in sensor network response data
 
     * each data set is the sensor network response to a source in a particular location.
@@ -96,7 +99,8 @@ def _(mo):
     * the list of source locations are below.
 
     ## locations of detectors in the environment
-    """)
+    """
+    )
     return
 
 
@@ -139,7 +143,8 @@ def _(box_dims, n_sensors, np):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
+    mo.md(
+        r"""
     ## locations of the radioactive source placed in the environment
 
     the first 25 rows come from Latin Hypercube sampling.
@@ -147,7 +152,8 @@ def _(mo):
     the next 25 rows are manually-selected on the corners/boundary.
 
     the remaining 25 are from another round of Latin Hypercube sampling.
-    """)
+    """
+    )
     return
 
 
@@ -166,9 +172,7 @@ def _(box_dims, pd):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
-    ## read in sensor responses
-    """)
+    mo.md(r"""## read in sensor responses""")
     return
 
 
@@ -243,13 +247,15 @@ def _(detector_outputs):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
+    mo.md(
+        r"""
     ## re-work data into an ML-friendly format
 
     ::lucide:lightbulb:: source locations paired with sensor network response vectors
 
     first, get list of sensors in the network.
-    """)
+    """
+    )
     return
 
 
@@ -270,9 +276,7 @@ def _(sensor_to_nice_int):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
-    next, from a sensor network response data frame, extract the count rate of a particular sensor.
-    """)
+    mo.md(r"""next, from a sensor network response data frame, extract the count rate of a particular sensor.""")
     return
 
 
@@ -290,12 +294,14 @@ def _(detector_outputs, np, sensors):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
+    mo.md(
+        r"""
     🎯 goal:
 
     * each row is an experiment where we place the source at a location and observe the sensor network response
     * the row lists the source location paired with the sensor response vector.
-    """)
+    """
+    )
     return
 
 
@@ -343,11 +349,13 @@ def _(data, np, sensors):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
+    mo.md(
+        r"""
     ## ::lucide:sailboat:: visually explore the data
 
     first, where are the source locations over all experiments?
-    """)
+    """
+    )
     return
 
 
@@ -429,9 +437,7 @@ def _(data, viz_source_locs):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
-    second, visualize the sensor readout and source location for a single experiment.
-    """)
+    mo.md(r"""second, visualize the sensor readout and source location for a single experiment.""")
     return
 
 
@@ -543,53 +549,7 @@ def _(box_dims, patches, thing_to_color):
 
 @app.cell
 def _(
-    box_dims,
-    plt,
-    sensor_to_loc,
-    sensor_to_nice_int,
-    sensors,
-    setup_environment,
-):
-    def _():
-        setup_environment(box_dims)
-        plt.scatter(
-                # x locs of sensors
-                [sensor_to_loc[sensor][0] for sensor in sensors], 
-                # y locs of sensors
-                [sensor_to_loc[sensor][1] for sensor in sensors],
-                s=65,
-                c="white",
-                edgecolor="black",
-                vmin=0,
-                marker="s",
-                label="sensor"
-            )
-
-        for sensor in sensors:
-            plt.annotate(
-                f"{sensor_to_nice_int[sensor]}",
-                (sensor_to_loc[sensor][0], sensor_to_loc[sensor][1]),
-                xytext=(5, 5),
-                textcoords="offset points", 
-                ha='left',
-                va='bottom'
-            )
-        plt.hlines([33-8.5,33-14.5,33-20.5,33-26.5], xmin=0, xmax=42)
-        plt.vlines([9.5,17.5,25.5,33.5],ymin=0,ymax=33)
-        # legend w unique entries
-        handles, labels = plt.gca().get_legend_handles_labels()
-        by_label = dict(zip(labels, handles))
-        plt.legend(by_label.values(), by_label.keys(), bbox_to_anchor=(1.05, 0.8), loc='upper left', borderaxespad=0)
-
-        plt.savefig("layout.pdf", format="pdf", bbox_inches='tight')
-        return plt.show()
-
-    _()
-    return
-
-
-@app.cell
-def _(
+    Line2D,
     box_dims,
     patches,
     plt,
@@ -599,8 +559,7 @@ def _(
     setup_environment,
     theme_colors,
 ):
-    from matplotlib.lines import Line2D
-    def _():
+    def viz_sensor_coverages():
         setup_environment(box_dims)
 
         for i, sensor in enumerate(sensors):
@@ -649,7 +608,7 @@ def _(
         plt.savefig("Detector ranges.pdf", format="pdf", bbox_inches='tight')
         return plt.show()
 
-    _()
+    viz_sensor_coverages()
     return
 
 
@@ -749,9 +708,7 @@ def _(data, viz_source_locs):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
-    the distribution of the detector responses over all experiments and correlations between them. use a log scale.
-    """)
+    mo.md(r"""the distribution of the detector responses over all experiments and correlations between them. use a log scale.""")
     return
 
 
@@ -899,7 +856,8 @@ def _(data, np, plt, sensor_to_nice_int, sensors, sns):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
+    mo.md(
+        r"""
     # ☢️ source location predictor
 
     ML task: predict source location from sensor network response
@@ -910,7 +868,8 @@ def _(mo):
     **output**: 2D source location
 
     ## leave-one-out cross validation
-    """)
+    """
+    )
     return
 
 
@@ -1027,9 +986,7 @@ def _(data, do_loo_cv, don_run_loo_cv):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
-    ## batch-level test/train splits
-    """)
+    mo.md(r"""## batch-level test/train splits""")
     return
 
 
@@ -1075,9 +1032,7 @@ def _(ExtraTreesRegressor, calculate_errors, np, sensors):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
-    ### batch-based train/test split
-    """)
+    mo.md(r"""### batch-based train/test split""")
     return
 
 
@@ -1104,9 +1059,7 @@ def _(data, do_train_test):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
-    ### grid-based train/test split
-    """)
+    mo.md(r"""### grid-based train/test split""")
     return
 
 
@@ -1158,9 +1111,7 @@ def _(box_dims, data_grid, plt, setup_environment, viz_sensor_locs):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
-    analyze error := norm of true source location vector minus predicted source location vector.
-    """)
+    mo.md(r"""analyze error := norm of true source location vector minus predicted source location vector.""")
     return
 
 
@@ -1185,9 +1136,7 @@ def _(data_loo, plt):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
-    parity plot over cross-validation procedure.
-    """)
+    mo.md(r"""parity plot over cross-validation procedure.""")
     return
 
 
@@ -1273,7 +1222,7 @@ def _(
     setup_environment,
     thing_to_color,
 ):
-    def explain_errors(data_loo):
+    def explain_errors(data_loo, savename):
         fig, ax = setup_environment(box_dims)
         draw_obstacles(ax)
 
@@ -1285,10 +1234,11 @@ def _(
             clip_on=False
         )
 
-        # source locs. color by error.
+        # source locs. color by average error.
+        avg_error = data_loo.groupby(["x_s", "y_s"])["error"].mean().reset_index()
         plt.scatter(
-            data_loo["x_s"], data_loo["y_s"],
-            c=data_loo["error"], vmin=0, vmax=data_loo["error"].max(),
+            avg_error["x_s"], avg_error["y_s"],
+            c=avg_error["error"], vmin=0, vmax=avg_error["error"].max(),
             marker="o", 
             s=65,
             clip_on=False, edgecolors="black", label="true\nsource\nlocation",
@@ -1311,10 +1261,10 @@ def _(
 
         handles, labels = plt.gca().get_legend_handles_labels()
         plt.legend(handles[-3:], labels[-3:], bbox_to_anchor=(1.35, 1), loc='upper left', borderaxespad=0)
-        plt.savefig("err_viz.pdf", format="pdf", bbox_inches='tight')
+        plt.savefig(savename, format="pdf", bbox_inches='tight')
         plt.show()
 
-    explain_errors(data_loo)
+    explain_errors(data_loo, "err_viz.pdf")
     return (explain_errors,)
 
 
@@ -1501,9 +1451,7 @@ def _(
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
-    ### sensor importance
-    """)
+    mo.md(r"""### sensor importance""")
     return
 
 
@@ -1581,9 +1529,7 @@ def _(
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
-    ## learning curve
-    """)
+    mo.md(r"""## learning curve""")
     return
 
 
@@ -1639,13 +1585,15 @@ def _(learning_curve, plt, run_learning_curve):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
+    mo.md(
+        r"""
     # ☢️ source presence classifier
 
     distinguish source presence from background.
 
     ##  background data
-    """)
+    """
+    )
     return
 
 
@@ -1706,9 +1654,7 @@ def _(data_bkg):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
-    classification. concatentate the background with non-background.
-    """)
+    mo.md(r"""classification. concatentate the background with non-background.""")
     return
 
 
@@ -1875,9 +1821,7 @@ def _(
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
-    viz the ones we got wrong
-    """)
+    mo.md(r"""viz the ones we got wrong""")
     return
 
 
@@ -1903,21 +1847,25 @@ def _(data_loo_c, disagreement_selector, viz_sensor_readout):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
+    mo.md(
+        r"""
     # ☢️ traditional least squares estimation of the source location
 
     first, calibrate a curve that gives sensor response to the source as a function of distance from the source.
-    """)
+    """
+    )
     return
 
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
+    mo.md(
+        r"""
     ## calibration curve
 
     output of sensor as a function of distance from source.
-    """)
+    """
+    )
     return
 
 
@@ -1947,9 +1895,7 @@ def _(np, pd):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
-    ### fit detector response function to data
-    """)
+    mo.md(r"""### fit detector response function to data""")
     return
 
 
@@ -2046,11 +1992,13 @@ def _(output_distance_data):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
+    mo.md(
+        r"""
     ### retreive distance from detector output
 
     second, given a sensor's reading, predict the distance of the source from it. this puts a circle around the sensor.
-    """)
+    """
+    )
     return
 
 
@@ -2081,11 +2029,13 @@ def _(find_distance_to_detector, opt_params):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
+    mo.md(
+        r"""
     ## least squares estimator for location of source
 
     third, given the response of the sensor network, select the subset of sensors that come into play with a detectable response.
-    """)
+    """
+    )
     return
 
 
@@ -2111,9 +2061,7 @@ def _(Nds, data, sensors):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
-    some of the experiments led to no detectable response for ANY sensor. these are false negatives.
-    """)
+    mo.md(r"""some of the experiments led to no detectable response for ANY sensor. these are false negatives.""")
     return
 
 
@@ -2126,9 +2074,7 @@ def _(Nds, data, sensors):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
-    when a SINGLE sensor in the network elicits a warning, we consider that a positive. but we need three for triangulation. so we select the top three sensors in terms of response from baseline.
-    """)
+    mo.md(r"""when a SINGLE sensor in the network elicits a warning, we consider that a positive. but we need three for triangulation. so we select the top three sensors in terms of response from baseline.""")
     return
 
 
@@ -2148,9 +2094,7 @@ def _(Nds, data, sensors):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
-    finally, the traditional localization method that finds source location most consistent with the "measured" distance. here measured means we look at the response and infer the distance from the calibration curve. now we search for source location that is most consistent with those distances we measure.
-    """)
+    mo.md(r"""finally, the traditional localization method that finds source location most consistent with the "measured" distance. here measured means we look at the response and infer the distance from the calibration curve. now we search for source location that is most consistent with those distances we measure.""")
     return
 
 
@@ -2294,9 +2238,7 @@ def _(Nds, data, opt_params, sensors, trad_localize):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
-    🥞 let's do it!
-    """)
+    mo.md(r"""🥞 let's do it!""")
     return
 
 
@@ -2360,11 +2302,13 @@ def _(data_loo, data_trad):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
+    mo.md(
+        r"""
     ## ☢️ a sub-baseline: simple triangulation
 
     weighted average of significant sensor locations.
-    """)
+    """
+    )
     return
 
 
@@ -2399,9 +2343,7 @@ def _(calculate_errors, data, dumb_triangulation, opt_params, sensors):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
-    Vizualizes the source locations where no solution was able to be found b/c no significant sensors
-    """)
+    mo.md(r"""Vizualizes the source locations where no solution was able to be found b/c no significant sensors""")
     return
 
 
@@ -2414,9 +2356,7 @@ def _(data, data_trad, np, viz_source_locs):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
-    ...when the errors are huge.
-    """)
+    mo.md(r"""...when the errors are huge.""")
     return
 
 
@@ -2430,9 +2370,7 @@ def _(data, data_trad, viz_source_locs):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
-    ## compare errors among methods
-    """)
+    mo.md(r"""## compare errors among methods""")
     return
 
 
@@ -2528,9 +2466,7 @@ def _(data_rand, learning_curve, plt, theme_colors):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
-    # 🚓 tracking
-    """)
+    mo.md(r"""# 🚓 tracking""")
     return
 
 
@@ -2917,9 +2853,7 @@ def _(
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
-    ### Plot Error vs Variance
-    """)
+    mo.md(r"""### Plot Error vs Variance""")
     return
 
 
@@ -3059,10 +2993,12 @@ def _(data_loo, np, plt):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
+    mo.md(
+        r"""
     # positional variance of detector readout
     (with a source present)
-    """)
+    """
+    )
     return
 
 
@@ -3088,7 +3024,6 @@ def _(csv, pd):
             df = pd.DataFrame(rows, columns=new_header)
 
             return df
-
     return (read_variance_outputs,)
 
 
@@ -3107,7 +3042,6 @@ def _(folder_path, n_sensors, os, read_variance_outputs):
             # unique sensors
             assert dataframes[exp]["SN"].nunique() == n_sensors
         return dataframes
-
     return (read_variance_data,)
 
 
@@ -3153,7 +3087,6 @@ def _(np, pd):
 
         return sn_dfs
 
-
     def compute_variance_stats(sn_dfs):
         records = []
         for sn, df in sn_dfs.items():
@@ -3163,14 +3096,13 @@ def _(np, pd):
                 vals = df[col].dropna()
                 records.append({
                     'SN':       sn,
-                    'Position': col,
+                    'region': col,
                     'Mean':     vals.mean(),
                     'Std':      vals.std(),
                     'Variance': vals.var(),
                     'CV%':      (vals.std() / vals.mean() * 100) if vals.mean() != 0 else np.nan
                 })
         return pd.DataFrame(records)
-
     return compute_variance_stats, reorganize_by_sn
 
 
@@ -3194,14 +3126,33 @@ def _(variance_stats):
 
 
 @app.cell
-def _(variance_stats):
+def _(box_dims, np, pd, variance_stats):
     averaged_positional_stats = (
-        variance_stats.groupby("Position")[["Mean", "Std", "Variance", "CV%"]]
+        variance_stats.groupby("region")[["Mean", "Std", "Variance", "CV%"]]
         .mean()
         .reset_index()
     )
-    averaged_positional_stats["Position"] = averaged_positional_stats["Position"].str[7:].astype(int)
-    return (averaged_positional_stats,)
+
+    region_locs = pd.DataFrame(
+        {
+            'x_s': [3.5, 13.5, 21.5, 29.5, 37.5, 3.5, 13.5, 21.5, 29.5, 37.5, 3.5, 13.5, 21.5, 29.5, 37.5, 3.5, 13.5, 21.5, 29.5, 37.5, 3.5, 13.5, 21.5, 29.5, 37.5],
+            'y_s': [3.5, 3.5, 3.5, 3.5, 3.5, 11, 11, 11, 11, 11, 17.5, 17.5, 17.5, 17.5, 17.5, 23.5, 23.5, 23.5, 23.5, 23.5, 29.5, 29.5, 29.5, 29.5, 29.5]
+        }
+    )
+    region_locs["y_s"] = box_dims[1] - region_locs["y_s"] # translate so that origin in bottom left
+    region_locs
+
+    averaged_positional_stats["region"] = averaged_positional_stats["region"].str[7:].astype(int)
+    averaged_positional_stats = averaged_positional_stats.sort_values(by=["region"])
+
+    averaged_positional_stats["x_s"] = np.zeros(averaged_positional_stats.shape[0])
+    averaged_positional_stats["y_s"] = np.zeros(averaged_positional_stats.shape[0])
+    for idx, row in averaged_positional_stats.iterrows():
+        _pos = averaged_positional_stats.loc[idx, "region"]
+        averaged_positional_stats.loc[idx, "x_s"] = region_locs.loc[_pos-1, "x_s"]
+        averaged_positional_stats.loc[idx, "y_s"] = region_locs.loc[_pos-1, "y_s"]
+    averaged_positional_stats
+    return averaged_positional_stats, region_locs
 
 
 @app.cell
@@ -3210,11 +3161,34 @@ def _(averaged_positional_stats):
     return
 
 
+@app.cell
+def _(
+    averaged_positional_stats,
+    box_dims,
+    plt,
+    setup_environment,
+    viz_sensor_locs,
+):
+    def viz_response_relative_variance(averaged_positional_stats):
+        fig, ax = setup_environment(box_dims)
+
+        viz_sensor_locs(ax)
+
+        plt.scatter(
+            averaged_positional_stats["x_s"], averaged_positional_stats["y_s"], c=averaged_positional_stats["CV%"], 
+            s=250, cmap="plasma", edgecolor="k"
+        )
+        plt.colorbar(label="average\ncoefficient of variation [%]\nof sensor responses")
+        plt.savefig("CV_sensor_response.pdf", format="pdf")
+        plt.show()
+
+    viz_response_relative_variance(averaged_positional_stats)
+    return
+
+
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
-    ### Region block cross-validation
-    """)
+    mo.md(r"""### study of how sensor noise affects prediction variance""")
     return
 
 
@@ -3225,27 +3199,14 @@ def grab_sensor_response_var(detector_output, sensor):
 
 
 @app.cell
-def _(box_dims, pd):
-    region_locs = pd.DataFrame(
-        {
-            'x_s': [3.5, 13.5, 21.5, 29.5, 37.5, 3.5, 13.5, 21.5, 29.5, 37.5, 3.5, 13.5, 21.5, 29.5, 37.5, 3.5, 13.5, 21.5, 29.5, 37.5, 3.5, 13.5, 21.5, 29.5, 37.5],
-            'y_s': [3.5, 3.5, 3.5, 3.5, 3.5, 11, 11, 11, 11, 11, 17.5, 17.5, 17.5, 17.5, 17.5, 23.5, 23.5, 23.5, 23.5, 23.5, 29.5, 29.5, 29.5, 29.5, 29.5]
-        }
-    )
-    region_locs["y_s"] = box_dims[1] - region_locs["y_s"] # translate so that origin in bottom left
-    region_locs
-    return (region_locs,)
-
-
-@app.cell
 def _(pd, region_locs, sensors, variance_outputs):
     def make_var_data_nice(variance_outputs, region_locs):
         rows = []
-    
+
         for exp_idx, df in variance_outputs.items():
             # get number of measurements (rows per sensor)
             n_measurements = df[df["SN"] == sensors[0]].shape[0]
-        
+
             for meas_idx in range(n_measurements):
                 new_row = {"region": exp_idx + 1}
                 new_row["x_s"] = region_locs.iloc[exp_idx]["x_s"]
@@ -3254,54 +3215,96 @@ def _(pd, region_locs, sensors, variance_outputs):
                     sensor_rows = df[df["SN"] == sensor].reset_index(drop=True)
                     new_row[sensor] = float(sensor_rows.loc[meas_idx, "ICR"])
                 rows.append(new_row)
-    
+
         return pd.DataFrame(rows)
+    
     nice_var_data = make_var_data_nice(variance_outputs, region_locs)
     return (nice_var_data,)
 
 
 @app.cell
-def _(nice_var_data):
-    nice_var_data
+def _(data, do_train_test, nice_var_data):
+    pred_new_test = do_train_test(data, nice_var_data)
+    return (pred_new_test,)
+
+
+@app.cell
+def _(explain_errors, pred_new_test):
+    explain_errors(pred_new_test, "sensor_noise_to_pred_variance.pdf")
     return
 
 
 @app.cell
-def _(nice_var_data):
-    nice_var_data.loc[nice_var_data["region"]!=1]
+def _(pred_new_test):
+    # these are how much predicted source locations vary due ONLY to sensor noise. 
+    pred_std_due_to_sensor_noise = pred_new_test.groupby(["x_s", "y_s"])[["x_s_pred", "y_s_pred"]].std().reset_index().rename(
+        columns={"x_s_pred": "STD of x_s_pred", "y_s_pred": "STD of y_s_pred"}
+    )
+    pred_std_due_to_sensor_noise
+    return (pred_std_due_to_sensor_noise,)
+
+
+@app.cell
+def _(np, pd, pred_new_test):
+    def compute_std_distance_mean_pred(pred_new_test):
+        # mean predictions for sysematic bias
+        std_d_from_mean_pred = []
+        regions = []
+        # loop over source locations
+        for name, group in pred_new_test.groupby(["x_s", "y_s"]):
+            # get mean predicted source location
+            mean_pred_source_loc = group[["x_s_pred", "y_s_pred"]].mean()
+            # get std of distance from predicted mean
+            std_d_from_mean_pred.append(
+                np.std(np.sqrt(((group[["x_s_pred", "y_s_pred"]] - mean_pred_source_loc)**2).sum(axis=1)))
+            )
+    
+            regions.append(group["region"].values[0])
+    
+        return pd.DataFrame({"region": regions, "std_d_from_mean_pred": std_d_from_mean_pred})
+
+    std_d_from_mean_pred = compute_std_distance_mean_pred(pred_new_test)
+    std_d_from_mean_pred
+    return (std_d_from_mean_pred,)
+
+
+@app.cell
+def _(averaged_positional_stats, pd, plt, std_d_from_mean_pred):
+    corr_pred_input_noise = pd.merge(std_d_from_mean_pred, averaged_positional_stats, on="region")
+
+    plt.figure()
+    plt.scatter(corr_pred_input_noise["CV%"], corr_pred_input_noise["std_d_from_mean_pred"])
+    plt.xlabel("average CV of\nsensor network readout [%]")
+    plt.ylabel("STD of predicted\nsource position [in]")
+    plt.savefig("correlate_sensor_noise_and_prediction_noise.pdf", format="pdf")
+    plt.show()
     return
 
 
 @app.cell
-def _(do_train_test, nice_var_data, pd):
-    def do_region_CV(data):
-        out_df = pd.DataFrame()
-        for region in range(25):
-            new_rows = (do_train_test(nice_var_data.loc[data["region"]!=region+1],nice_var_data.loc[data["region"]==region+1]))
-            out_df = pd.concat([out_df, new_rows], ignore_index=True)
-        return out_df
-    region_data = do_region_CV(nice_var_data)
-    return (region_data,)
-
-
-@app.cell
-def _(region_data):
-    region_data
+def _(pred_new_test):
+    pred_new_test
     return
 
 
 @app.cell
-def _(explain_errors, region_data):
-    explain_errors(region_data)
+def _(pred_std_due_to_sensor_noise):
+    pred_std_due_to_sensor_noise
     return
 
 
-app._unparsable_cell(
-    r"""
-    * we should look at relative variance---std / mean
-    """,
-    name="_"
-)
+@app.cell
+def _(plt, pred_new_test, pred_std_due_to_sensor_noise):
+    plt.figure()
+    plt.hist(pred_new_test["error_y"], density=True)
+    plt.hist(pred_std_due_to_sensor_noise["STD of y_s_pred"], density=True, alpha=0.5)
+    plt.show()
+    return
+
+
+@app.cell
+def _():
+    return
 
 
 if __name__ == "__main__":
