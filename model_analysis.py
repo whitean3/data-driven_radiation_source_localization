@@ -361,19 +361,21 @@ def _(mo):
 
 @app.cell
 def _(sensor_to_loc, sensors):
-    def viz_sensor_locs(ax):
+    def viz_sensor_locs(ax, color_sensor_id=None):
+        colors = ["white" for sensor in sensors]
+        if color_sensor_id:
+            colors[color_sensor_id] = "black"
         ax.scatter(
             # x locs of sensors
             [sensor_to_loc[sensor][0] for sensor in sensors], 
             # y locs of sensors
             [sensor_to_loc[sensor][1] for sensor in sensors],
-            c="white",
+            c=colors,
             s=65,
             edgecolor="black",
             marker="s",
             label="sensor"
         )
-
     return (viz_sensor_locs,)
 
 
@@ -432,6 +434,55 @@ def _(
 def _(data, viz_source_locs):
     # test grid ID
     viz_source_locs(data, ids=data["grid ID"] == 6)
+    return
+
+
+@app.cell
+def _(
+    box_dims,
+    data,
+    plt,
+    sensor_to_loc,
+    sensor_to_nice_int,
+    sensors,
+    setup_environment,
+    viz_sensor_locs,
+):
+    def viz_sensor_response(data, sensor_id):
+        fig, ax = setup_environment(box_dims)
+
+        viz_sensor_locs(ax, color_sensor_id=sensor_id-1)
+        # sensor names
+        for sensor in sensors:
+            plt.annotate(
+                f"{sensor_to_nice_int[sensor]}",
+                (sensor_to_loc[sensor][0], sensor_to_loc[sensor][1]),
+                xytext=(5, 5),
+                textcoords="offset points", 
+                ha='left',
+                va='bottom'
+            )
+
+        # source locations
+        plt.scatter(
+            data["x_s"], data["y_s"], 
+            clip_on=False, c=data[sensors[sensor_id-1]], s=65, marker="o", 
+            label="radiation\nsource"
+        )
+        plt.colorbar(label=f"sensor {sensor_id} response [CPS]")
+
+        plt.title(f"response by sensor {sensor_id}", y=1.05)
+
+        plt.savefig("sensor_response_surface_{sensor_id}.pdf", format="pdf", bbox_inches='tight')
+        plt.show()
+
+    viz_sensor_response(data, 4)
+    return
+
+
+@app.cell
+def _(data):
+    data
     return
 
 
