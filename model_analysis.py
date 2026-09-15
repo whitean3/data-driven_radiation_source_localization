@@ -54,12 +54,14 @@ def _():
         os,
         patches,
         pd,
+        permutation_importance,
         plt,
         precision_recall_curve,
         pt,
         roc_curve,
         root_scalar,
         sns,
+        train_test_split,
         transforms,
     )
 
@@ -1514,7 +1516,6 @@ def _(ExtraTreesRegressor, sensors):
         tree_ensemble = ExtraTreesRegressor(n_estimators=n_estimators)
         tree_ensemble.fit(sensor_network_readout, source_locs)
         return tree_ensemble
-
     return (train_tree_ensemble,)
 
 
@@ -1525,16 +1526,75 @@ def _(data, n_sensors, np, plt, train_tree_ensemble):
 
     plt.figure()
     plt.xlabel("sensor")
-    plt.ylabel("feature importance")
-    plt.xticks(np.arange(n_sensors))
-    plt.bar(np.arange(n_sensors), tree_ensemble.feature_importances_)
+    plt.ylabel("impurity-based\nfeature importance")
+    plt.xticks(np.arange(n_sensors)+1)
+    plt.bar(np.arange(n_sensors)+1, tree_ensemble.feature_importances_)
+    plt.savefig("sensor_impurity_importance_bar.pdf", format="pdf", bbox_inches='tight')
+    plt.show()
     return (tree_ensemble,)
 
 
 @app.cell
 def _(
+    ExtraTreesRegressor,
+    n_sensors,
+    np,
+    permutation_importance,
+    plt,
+    sensors,
+    train_test_split,
+):
+    def do_permutation_feature_importance(data, n_estimators=100, n_splits=10, test_size=0.2):
+        X = data.loc[:, sensors]        # features
+        y = data.loc[:, ["x_s", "y_s"]] # targets
+
+        all_importances = []  # will hold arrays of shape (n_sensors,) per split
+
+        for split_idx in range(n_splits):
+            X_train, X_test, y_train, y_test = train_test_split(
+                X, y, test_size=test_size, random_state=split_idx
+            )
+
+            tree_ensemble = ExtraTreesRegressor(n_estimators=n_estimators, random_state=split_idx)
+            tree_ensemble.fit(X_train, y_train)
+
+            r = permutation_importance(
+                tree_ensemble, X_test, y_test,
+                n_repeats=30, random_state=split_idx
+            )
+            all_importances.append(r["importances_mean"])  # mean over the 30 repeats for this split
+
+        all_importances = np.array(all_importances)  # shape: (n_splits, n_sensors)
+
+        importances_mean = all_importances.mean(axis=0)
+        importances_std = all_importances.std(axis=0)
+
+        plt.figure()
+        plt.xlabel("sensor")
+        plt.ylabel("permutation-based\nfeature importance")
+        plt.xticks(np.arange(n_sensors)+1)
+        plt.bar(np.arange(n_sensors)+1, importances_mean, yerr=importances_std, capsize=4)
+        plt.savefig("sensor_permutation_importance_bar.pdf", format="pdf", bbox_inches='tight')
+        plt.show()
+
+        return importances_mean, importances_std
+    return (do_permutation_feature_importance,)
+
+
+@app.cell
+def _(data, do_permutation_feature_importance, viz_sensor_importance):
+    importances_mean, importances_std = do_permutation_feature_importance(data)
+
+    viz_sensor_importance(
+        importances_mean, title="permutation-based\nsensor importance scores",
+        savename="permutation_sensor_importance_scores"
+    )
+    return
+
+
+@app.cell
+def _(
     box_dims,
-    data,
     draw_obstacles,
     n_sensors,
     plt,
@@ -1544,7 +1604,7 @@ def _(
     setup_environment,
     tree_ensemble,
 ):
-    def viz_sensor_importance(data, tree_ensemble):
+    def viz_sensor_importance(importance_scores, title="", savename=""):
         fig, ax = setup_environment(box_dims)
         draw_obstacles(ax)
 
@@ -1554,9 +1614,9 @@ def _(
             [sensor_to_loc[sensor][1] for sensor in sensors],
             s=50, edgecolor="black", marker="s",
             clip_on=False,
-            c=[tree_ensemble.feature_importances_[sensor] for sensor in range(n_sensors)],
+            c=[importance_scores[sensor] for sensor in range(n_sensors)],
             vmin=0,
-            vmax=tree_ensemble.feature_importances_.max(),
+            vmax=importance_scores.max(),
             label="sensor",
             cmap="viridis"
         )
@@ -1569,13 +1629,16 @@ def _(
                     ha='left',
                     va='bottom'
                 )
-        plt.colorbar(label="sensor importance")
-        plt.savefig("sensor_importance.pdf", format="pdf", bbox_inches='tight')
-        # plt.title("sensor importance")
+        plt.colorbar(label="sensor importance score")
+        plt.title(title, pad=20)
+        plt.savefig(savename + ".pdf", format="pdf", bbox_inches='tight')
         plt.show()
 
-    viz_sensor_importance(data, tree_ensemble)
-    return
+    viz_sensor_importance(
+        tree_ensemble.feature_importances_, title="impurity-based\nsensor importance scores",
+        savename="impurity_sensor_importance_scores"
+    )
+    return (viz_sensor_importance,)
 
 
 @app.cell(hide_code=True)
@@ -3268,7 +3331,7 @@ def _(pd, region_locs, sensors, variance_outputs):
                 rows.append(new_row)
 
         return pd.DataFrame(rows)
-    
+
     nice_var_data = make_var_data_nice(variance_outputs, region_locs)
     return (nice_var_data,)
 
@@ -3309,9 +3372,9 @@ def _(np, pd, pred_new_test):
             std_d_from_mean_pred.append(
                 np.std(np.sqrt(((group[["x_s_pred", "y_s_pred"]] - mean_pred_source_loc)**2).sum(axis=1)))
             )
-    
+
             regions.append(group["region"].values[0])
-    
+
         return pd.DataFrame({"region": regions, "std_d_from_mean_pred": std_d_from_mean_pred})
 
     std_d_from_mean_pred = compute_std_distance_mean_pred(pred_new_test)
