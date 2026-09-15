@@ -1368,7 +1368,7 @@ def _(mo):
 
 @app.cell
 def _(ExtraTreesRegressor, LeaveOneOut, data, mapie, np, sensors):
-    def do_jackknife_plus_loo(data, n_estimators=100, alpha=0.1, random_state=0):
+    def do_jackknife_plus_loo(data, n_estimators=100, alpha=0.2, random_state=0):
         data_loo = data.copy()
         for sl in ["x_s", "y_s"]:
             data_loo[sl + "_pred"] = np.zeros((len(data)))
@@ -1376,7 +1376,7 @@ def _(ExtraTreesRegressor, LeaveOneOut, data, mapie, np, sensors):
             data_loo[sl + "_hi"] = np.zeros((len(data)))
 
         loo = LeaveOneOut()
-        for i, (_train_index, _test_index) in enumerate(loo.split(data_loo)):
+        for _, (_train_index, _test_index) in enumerate(loo.split(data_loo)):
             # account for non 0, ..., n_row indexing (NaN's dropped for delta learning)
             train_index = data_loo.index[_train_index]
             test_index  = data_loo.index[_test_index]
@@ -1394,25 +1394,30 @@ def _(ExtraTreesRegressor, LeaveOneOut, data, mapie, np, sensors):
 
                 mapie_model = mapie.regression.CrossConformalRegressor(
                     estimator=base_model,
-                    confidence_level=1 - alpha,   # v1 uses confidence_level, not alpha
+                    confidence_level=1-alpha/2,   # v1 uses confidence_level, not alpha
                     method="plus",                # jackknife+ aggregation
-                    cv=-1,                        # -1 = LeaveOneOut -> jackknife
+                    cv=10,                        # -1 = LeaveOneOut -> jackknife
                     random_state=random_state,
                 )
                 mapie_model.fit_conformalize(sensor_network_readout, source_loc)
 
-                source_loc_pred = mapie_model.predict(sensor_network_readout_test)
-                _, source_loc_pis = mapie_model.predict_interval(sensor_network_readout_test)
+                source_loc_pred, source_loc_pis = mapie_model.predict_interval(sensor_network_readout_test)
             
                 # store prediction of source location on test network readout.
                 data_loo.loc[test_index, target + "_pred"] = source_loc_pred
-                data_loo.loc[test_index, target + "_lo"] = source_loc_pis[0][0]
-                data_loo.loc[test_index, target + "_hi"] = source_loc_pis[0][1]
+                data_loo.loc[test_index, target + "_lo"] = source_loc_pis[0, 0, 0]
+                data_loo.loc[test_index, target + "_hi"] = source_loc_pis[0, 1, 0]
     
         return data_loo
 
     data_loo_jacknife = do_jackknife_plus_loo(data)
     return (data_loo_jacknife,)
+
+
+@app.cell
+def _(data_loo_jacknife):
+    data_loo_jacknife
+    return
 
 
 @app.cell
@@ -1425,7 +1430,7 @@ def _(data_loo_jacknife, np, plt):
         plt.xlabel("width of prediction interval [in]")
         plt.ylabel("prediction error [in]")
         plt.scatter(data_loo[target + "_pi_width"], data_loo[target + "_error"])
-        plt.gca().set_aspect('equal', 'box')
+        # plt.gca().set_aspect('equal', 'box')
         plt.savefig(f"jacknife_piw_error_correlation_{target}.pdf", format="pdf")
         plt.show()
 
@@ -1437,7 +1442,7 @@ def _(data_loo_jacknife, np, plt):
 @app.cell
 def _(
     box_dims,
-    data_loo,
+    data_loo_jacknife,
     draw_obstacles,
     patches,
     plt,
@@ -1509,7 +1514,7 @@ def _(
         plt.show()
 
     _exp = 30
-    viz_prediction_jacknife(data_loo, _exp)
+    viz_prediction_jacknife(data_loo_jacknife, _exp)
     return
 
 
