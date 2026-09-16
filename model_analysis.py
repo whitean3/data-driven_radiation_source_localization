@@ -12,6 +12,7 @@ def _():
     import math
     import pandas as pd
     import marimo as mo
+    import mapie
     import matplotlib.pyplot as plt
     import matplotlib.patches as patches
     from matplotlib.lines import Line2D
@@ -56,6 +57,7 @@ def _():
         average_precision_score,
         csv,
         differential_evolution,
+        mapie,
         matplotlib,
         mo,
         np,
@@ -63,12 +65,14 @@ def _():
         os,
         patches,
         pd,
+        permutation_importance,
         plt,
         precision_recall_curve,
         pt,
         roc_curve,
         root_scalar,
         sns,
+        train_test_split,
         transforms,
     )
 
@@ -959,7 +963,7 @@ def _(np):
 
 
 @app.cell
-def _(ExtraTreesRegressor, LeaveOneOut, calculate_errors, np, sensors):
+def do_loo_cv(ExtraTreesRegressor, LeaveOneOut, calculate_errors, np, sensors):
     # a multi-output tree ensemble model. maps 8D vectors to 2D vectors.
     #  maps sensor network readout to source location
     def do_loo_cv(
@@ -1448,66 +1452,230 @@ def _(Ellipse, np, transforms):
     return (draw_confidence_ellipse,)
 
 
-@app.cell
-def _(Ellipse, np, transforms):
-    def draw_confidence_ellipse_tracking_jackknife(x, y, ax, n_std=1.0, facecolor='none', **kwargs):
-        if x.size != y.size:
-            raise ValueError("x and y must be the same size")
-
-        n = len(x)
-
-        # --- Jackknife resampling ---
-        # For each observation i, compute the covariance matrix leaving out observation i
-        jack_cov = np.zeros((n, 2, 2))
-        for i in range(n):
-            x_jack = np.delete(x, i)
-            y_jack = np.delete(y, i)
-            jack_cov[i] = np.cov(x_jack, y_jack)
-
-        # Jackknife estimate of covariance matrix (mean of leave-one-out estimates)
-        cov_jack = np.mean(jack_cov, axis=0)
-
-        # Jackknife standard error of each cov element
-        jack_se = np.sqrt(((n - 1) / n) * np.sum((jack_cov - cov_jack) ** 2, axis=0))
-
-        # --- Bias-corrected covariance estimate ---
-        cov_original = np.cov(x, y)
-        cov_bias_corrected = n * cov_original - (n - 1) * cov_jack
-
-        # --- Ellipse geometry from bias-corrected covariance ---
-        pearson = cov_bias_corrected[0, 1] / np.sqrt(
-            cov_bias_corrected[0, 0] * cov_bias_corrected[1, 1]
-        )
-        pearson = np.clip(pearson, -1 + 1e-10, 1 - 1e-10)  # numerical safety
-
-        ell_radius_x = np.sqrt(1 + pearson)
-        ell_radius_y = np.sqrt(1 - pearson)
-
-        ellipse = Ellipse(
-            (0, 0),
-            width=ell_radius_x * 2,
-            height=ell_radius_y * 2,
-            facecolor=facecolor,
-            **kwargs
-        )
-
-        # --- Scale using jackknife standard errors instead of raw std devs ---
-        # jack_se[0,0] = SE of variance in x, jack_se[1,1] = SE of variance in y
-        scale_x = np.sqrt(jack_se[0, 0]) * n_std
-        scale_y = np.sqrt(jack_se[1, 1]) * n_std
-
-        mean_x = np.mean(x)
-        mean_y = np.mean(y)
-
-        transf = transforms.Affine2D() \
-            .rotate_deg(45) \
-            .scale(scale_x, scale_y) \
-            .translate(mean_x, mean_y)
-
-        ellipse.set_transform(transf + ax.transData)
-        return ax.add_patch(ellipse)
-
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""### UQ""")
     return
+
+
+@app.cell
+def _(ExtraTreesRegressor, LeaveOneOut, data, mapie, np, sensors):
+    def do_jackknife_plus_loo(data, n_estimators=100, alpha=0.2, random_state=0):
+        data_loo = data.copy()
+        for sl in ["x_s", "y_s"]:
+            data_loo[sl + "_pred"] = np.zeros((len(data)))
+            data_loo[sl + "_lo"] = np.zeros((len(data)))
+            data_loo[sl + "_hi"] = np.zeros((len(data)))
+
+        loo = LeaveOneOut()
+        for _, (_train_index, _test_index) in enumerate(loo.split(data_loo)):
+            # account for non 0, ..., n_row indexing (NaN's dropped for delta learning)
+            train_index = data_loo.index[_train_index]
+            test_index  = data_loo.index[_test_index]
+
+            # X_train
+            sensor_network_readout = data_loo.loc[train_index, sensors]
+            # X_test
+            sensor_network_readout_test = data_loo.loc[test_index, sensors]
+
+            for target in ["x_s", "y_s"]:
+                # y_train
+                source_loc = data_loo.loc[train_index, target]
+        
+                base_model = ExtraTreesRegressor(n_estimators=n_estimators, random_state=random_state)
+
+                mapie_model = mapie.regression.CrossConformalRegressor(
+                    estimator=base_model,
+                    confidence_level=1-alpha/2,   # v1 uses confidence_level, not alpha
+                    method="plus",                # jackknife+ aggregation
+                    cv=10,                        # -1 = LeaveOneOut -> jackknife
+                    random_state=random_state,
+                )
+                mapie_model.fit_conformalize(sensor_network_readout, source_loc)
+
+                source_loc_pred, source_loc_pis = mapie_model.predict_interval(sensor_network_readout_test)
+            
+                # store prediction of source location on test network readout.
+                data_loo.loc[test_index, target + "_pred"] = source_loc_pred
+                data_loo.loc[test_index, target + "_lo"] = source_loc_pis[0, 0, 0]
+                data_loo.loc[test_index, target + "_hi"] = source_loc_pis[0, 1, 0]
+    
+        return data_loo
+
+    data_loo_jacknife = do_jackknife_plus_loo(data)
+    return (data_loo_jacknife,)
+
+
+@app.cell
+def _(data_loo_jacknife):
+    data_loo_jacknife
+    return
+
+
+@app.cell
+def _(data_loo_jacknife, np, plt):
+    def correlate_pi_with_error(data_loo, target):
+        data_loo[target + "_pi_width"] = data_loo[target + "_hi"] - data_loo[target + "_lo"]
+        data_loo[target + "_error"] = np.abs(data_loo[target + "_pred"] - data_loo[target])
+
+        plt.figure()
+        plt.xlabel("width of prediction interval [in]")
+        plt.ylabel("prediction error [in]")
+        plt.scatter(data_loo[target + "_pi_width"], data_loo[target + "_error"])
+        # plt.gca().set_aspect('equal', 'box')
+        plt.savefig(f"jacknife_piw_error_correlation_{target}.pdf", format="pdf")
+        plt.show()
+
+    for _target in ["x_s", "y_s"]:
+        correlate_pi_with_error(data_loo_jacknife, _target)
+    return
+
+
+@app.cell
+def _(
+    box_dims,
+    data_loo_jacknife,
+    draw_obstacles,
+    patches,
+    plt,
+    sensor_colormap,
+    sensor_to_loc,
+    sensor_to_nice_int,
+    sensors,
+    setup_environment,
+    theme_colors,
+    thing_to_color,
+):
+    def viz_prediction_jacknife(data_loo, exp, incl_ellipse=True):
+        max_response = 75.0 
+
+        fig, ax = setup_environment(box_dims)
+        draw_obstacles(ax)
+
+        # source locs. color by error.
+        plt.scatter(
+            data_loo.loc[exp, "x_s"], data_loo.loc[exp, "y_s"],
+            clip_on=False, edgecolors="black", color=theme_colors[4],
+            s=65, marker="o",
+            label="true\nsource\nlocation"
+        )
+
+        # plot sensors
+        plt.scatter(
+            [sensor_to_loc[sensor][0] for sensor in sensors],
+            [sensor_to_loc[sensor][1] for sensor in sensors],
+            s=50, edgecolor="black", marker="s",
+            clip_on=False,
+            c=[data_loo.loc[exp, sensor] for sensor in sensors],
+            vmin=0,
+            vmax=max_response,
+            label="sensor",
+            cmap=sensor_colormap
+        )
+
+        plt.colorbar(label="count rate [CPS]", extend="max")
+
+        # viz uncertainty quantification
+        width  = data_loo.loc[exp, "x_s_hi"] - data_loo.loc[exp, "x_s_lo"]
+        height = data_loo.loc[exp, "y_s_hi"] - data_loo.loc[exp, "y_s_lo"]
+
+        rect = patches.Rectangle(
+            (data_loo.loc[exp, "x_s_lo"], data_loo.loc[exp, "y_s_lo"]),   # bottom-left corner
+            width, height,
+            linewidth=1.5,
+            edgecolor=thing_to_color["pred source loc"],
+            facecolor=thing_to_color["pred source loc"],
+            alpha=0.15,
+        )
+        ax.add_patch(rect)
+    
+        for sensor in sensors:
+            plt.annotate(
+                f"{sensor_to_nice_int[sensor]}",
+                (sensor_to_loc[sensor][0], sensor_to_loc[sensor][1]),
+                xytext=(5, 5),
+                textcoords="offset points", 
+                ha='left',
+                va='bottom'
+            )
+        
+        handles, labels = plt.gca().get_legend_handles_labels()
+        plt.legend(handles[-2:], labels[-2:], bbox_to_anchor=(1.3, 0.5), loc='upper left', borderaxespad=0)
+    
+        plt.savefig(f"conf_ellipse_jacknife_expt_{exp}.pdf", format="pdf", bbox_inches='tight')
+        plt.show()
+
+    _exp = 30
+    viz_prediction_jacknife(data_loo_jacknife, _exp)
+    return
+
+
+@app.cell
+def _(ExtraTreesRegressor, LeaveOneOut, calculate_errors, np, sensors):
+    # a multi-output tree ensemble model. maps 8D vectors to 2D vectors.
+    #  maps sensor network readout to source location
+    def do_loo_cv(
+        data, n_estimators=250, verbose=True, very_verbose=False, uq=True
+    ):
+        data_loo = data.copy()
+        # store predicted source locations in data frame.
+        #  ok bc each data point is test point ONCE.
+        data_loo["x_s_pred"] = np.zeros((len(data)))
+        data_loo["y_s_pred"] = np.zeros((len(data)))
+        if uq:
+            data_loo["ensemble pred source locs"] = [np.zeros(n_estimators) for _ in range(len(data_loo))]
+
+        loo = LeaveOneOut()
+        for i, (_train_index, _test_index) in enumerate(loo.split(data_loo)):
+            # account for non 0, ..., n_row indexing (NaN's dropped for delta learning)
+            train_index = data_loo.index[_train_index]
+            test_index  = data_loo.index[_test_index]
+
+            assert test_index.size == 1
+            if verbose:
+                print("fold :", i, " / ", data.shape[0])
+
+                if very_verbose:
+                    print("\ttest expt: ", test_index)
+                    print("\ttrain expt: ", train_index)
+                    print("\t\ttraining the tree ensemble.")
+
+            # build X_train, y_train
+            sensor_network_readout = data_loo.loc[train_index, sensors]
+            source_locs = data_loo.loc[train_index, ["x_s", "y_s"]]
+
+            # train tree ensemble on training data
+            tree_ensemble = ExtraTreesRegressor(n_estimators=n_estimators)
+            tree_ensemble.fit(sensor_network_readout, source_locs)
+
+            # test tree ensemble on test data
+            # first, build X_test, y_test
+            if very_verbose:
+                print("\t\ttesting the tree ensemble.")
+            sensor_network_readout_test = data_loo.loc[test_index, sensors]
+            source_locs_test_pred = tree_ensemble.predict(sensor_network_readout_test)[0]
+
+            # store prediction of source location on test network readout.
+            data_loo.loc[test_index, "x_s_pred"] = source_locs_test_pred[0]
+            data_loo.loc[test_index, "y_s_pred"] = source_locs_test_pred[1]
+
+            # also store predictions by each tree for UQ
+            for tree in tree_ensemble.estimators_: # back to suppress warning
+                tree.feature_names_in_ = tree_ensemble.feature_names_in_
+
+            if uq:
+                data_loo.loc[test_index, "ensemble pred source locs"] = [
+                    np.array(
+                        [tree.predict(sensor_network_readout_test)[0] for tree in tree_ensemble.estimators_]
+                    )
+                ]
+
+        # DONE! compute and store error = distance from true to predicted source
+        calculate_errors(data_loo)
+
+        return data_loo
+
+    return (do_loo_cv,)
 
 
 @app.cell
@@ -1608,7 +1776,6 @@ def _(ExtraTreesRegressor, sensors):
         tree_ensemble = ExtraTreesRegressor(n_estimators=n_estimators)
         tree_ensemble.fit(sensor_network_readout, source_locs)
         return tree_ensemble
-
     return (train_tree_ensemble,)
 
 
@@ -1619,16 +1786,75 @@ def _(data, n_sensors, np, plt, train_tree_ensemble):
 
     plt.figure()
     plt.xlabel("sensor")
-    plt.ylabel("feature importance")
-    plt.xticks(np.arange(n_sensors))
-    plt.bar(np.arange(n_sensors), tree_ensemble.feature_importances_)
+    plt.ylabel("impurity-based\nfeature importance")
+    plt.xticks(np.arange(n_sensors)+1)
+    plt.bar(np.arange(n_sensors)+1, tree_ensemble.feature_importances_)
+    plt.savefig("sensor_impurity_importance_bar.pdf", format="pdf", bbox_inches='tight')
+    plt.show()
     return (tree_ensemble,)
 
 
 @app.cell
 def _(
+    ExtraTreesRegressor,
+    n_sensors,
+    np,
+    permutation_importance,
+    plt,
+    sensors,
+    train_test_split,
+):
+    def do_permutation_feature_importance(data, n_estimators=100, n_splits=10, test_size=0.2):
+        X = data.loc[:, sensors]        # features
+        y = data.loc[:, ["x_s", "y_s"]] # targets
+
+        all_importances = []  # will hold arrays of shape (n_sensors,) per split
+
+        for split_idx in range(n_splits):
+            X_train, X_test, y_train, y_test = train_test_split(
+                X, y, test_size=test_size, random_state=split_idx
+            )
+
+            tree_ensemble = ExtraTreesRegressor(n_estimators=n_estimators, random_state=split_idx)
+            tree_ensemble.fit(X_train, y_train)
+
+            r = permutation_importance(
+                tree_ensemble, X_test, y_test,
+                n_repeats=30, random_state=split_idx
+            )
+            all_importances.append(r["importances_mean"])  # mean over the 30 repeats for this split
+
+        all_importances = np.array(all_importances)  # shape: (n_splits, n_sensors)
+
+        importances_mean = all_importances.mean(axis=0)
+        importances_std = all_importances.std(axis=0)
+
+        plt.figure()
+        plt.xlabel("sensor")
+        plt.ylabel("permutation-based\nfeature importance")
+        plt.xticks(np.arange(n_sensors)+1)
+        plt.bar(np.arange(n_sensors)+1, importances_mean, yerr=importances_std, capsize=4)
+        plt.savefig("sensor_permutation_importance_bar.pdf", format="pdf", bbox_inches='tight')
+        plt.show()
+
+        return importances_mean, importances_std
+    return (do_permutation_feature_importance,)
+
+
+@app.cell
+def _(data, do_permutation_feature_importance, viz_sensor_importance):
+    importances_mean, importances_std = do_permutation_feature_importance(data)
+
+    viz_sensor_importance(
+        importances_mean, title="permutation-based\nsensor importance scores",
+        savename="permutation_sensor_importance_scores"
+    )
+    return
+
+
+@app.cell
+def _(
     box_dims,
-    data,
     draw_obstacles,
     n_sensors,
     plt,
@@ -1638,7 +1864,7 @@ def _(
     setup_environment,
     tree_ensemble,
 ):
-    def viz_sensor_importance(data, tree_ensemble):
+    def viz_sensor_importance(importance_scores, title="", savename=""):
         fig, ax = setup_environment(box_dims)
         draw_obstacles(ax)
 
@@ -1648,9 +1874,9 @@ def _(
             [sensor_to_loc[sensor][1] for sensor in sensors],
             s=50, edgecolor="black", marker="s",
             clip_on=False,
-            c=[tree_ensemble.feature_importances_[sensor] for sensor in range(n_sensors)],
+            c=[importance_scores[sensor] for sensor in range(n_sensors)],
             vmin=0,
-            vmax=tree_ensemble.feature_importances_.max(),
+            vmax=importance_scores.max(),
             label="sensor",
             cmap="viridis"
         )
@@ -1663,13 +1889,16 @@ def _(
                     ha='left',
                     va='bottom'
                 )
-        plt.colorbar(label="sensor importance")
-        plt.savefig("sensor_importance.pdf", format="pdf", bbox_inches='tight')
-        # plt.title("sensor importance")
+        plt.colorbar(label="sensor importance score")
+        plt.title(title, pad=20)
+        plt.savefig(savename + ".pdf", format="pdf", bbox_inches='tight')
         plt.show()
 
-    viz_sensor_importance(data, tree_ensemble)
-    return
+    viz_sensor_importance(
+        tree_ensemble.feature_importances_, title="impurity-based\nsensor importance scores",
+        savename="impurity_sensor_importance_scores"
+    )
+    return (viz_sensor_importance,)
 
 
 @app.cell(hide_code=True)
