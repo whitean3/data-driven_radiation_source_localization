@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.23.9"
+__generated_with = "0.17.7"
 app = marimo.App(width="medium")
 
 
@@ -15,6 +15,7 @@ def _():
     import mapie
     import matplotlib.pyplot as plt
     import matplotlib.patches as patches
+    import matplotlib.colors as colors
     from matplotlib.lines import Line2D
     import matplotlib
     from matplotlib.patches import Ellipse
@@ -43,7 +44,6 @@ def _():
         cross_val_score,
         cross_val_predict,
     )
-
     return (
         ConfusionMatrixDisplay,
         Ellipse,
@@ -55,6 +55,7 @@ def _():
         RepeatedKFold,
         auc,
         average_precision_score,
+        colors,
         csv,
         differential_evolution,
         mapie,
@@ -214,7 +215,6 @@ def _(csv, n_sensors, pd):
             df = df[start:]
 
             return df
-
     return (read_detector_outputs,)
 
 
@@ -383,7 +383,6 @@ def _(sensor_to_loc, sensors):
             marker="s",
             label="sensor"
         )
-
     return (viz_sensor_locs,)
 
 
@@ -448,6 +447,7 @@ def _(data, viz_source_locs):
 @app.cell
 def _(
     box_dims,
+    colors,
     data,
     plt,
     sensor_to_loc,
@@ -474,8 +474,9 @@ def _(
         # source locations
         plt.scatter(
             data["x_s"], data["y_s"], 
-            clip_on=False, c=data[sensors[sensor_id-1]], s=65, marker="o", 
-            label="radiation\nsource"
+            clip_on=False, c=data[sensors[sensor_id-1]] , s=65, marker="o", 
+            label="radiation\nsource",
+            norm=colors.PowerNorm(gamma=0.5)
         )
         plt.colorbar(label=f"sensor {sensor_id} response [CPS]")
 
@@ -484,7 +485,7 @@ def _(
         plt.savefig("sensor_response_surface_{sensor_id}.pdf", format="pdf", bbox_inches='tight')
         plt.show()
 
-    viz_sensor_response(data, 4)
+    viz_sensor_response(data, 7)
     return
 
 
@@ -518,7 +519,6 @@ def _(draw_obstacles, plt):
         plt.ylim(0, box_dims[1])
 
         return fig, ax
-
     return (setup_environment,)
 
 
@@ -604,7 +604,6 @@ def _(box_dims, patches, thing_to_color):
                 label=mat[r]
             )
             ax.add_patch(rectangle)
-
     return (draw_obstacles,)
 
 
@@ -958,7 +957,6 @@ def _(np):
         data["error"] = np.sqrt(
             (data["x_s"] - data["x_s_pred"]) ** 2 + (data["y_s"] - data["y_s_pred"]) ** 2
         )
-
     return (calculate_errors,)
 
 
@@ -997,7 +995,7 @@ def do_loo_cv(ExtraTreesRegressor, LeaveOneOut, calculate_errors, np, sensors):
             source_locs = data_loo.loc[train_index, ["x_s", "y_s"]]
 
             # train tree ensemble on training data
-            tree_ensemble = ExtraTreesRegressor(n_estimators=n_estimators)
+            tree_ensemble = ExtraTreesRegressor(n_estimators=n_estimators, min_samples_leaf=1, min_samples_split=3, max_depth=12, max_features=12, bootstrap=False)
             tree_ensemble.fit(sensor_network_readout, source_locs)
 
             # test tree ensemble on test data
@@ -1026,7 +1024,6 @@ def do_loo_cv(ExtraTreesRegressor, LeaveOneOut, calculate_errors, np, sensors):
         calculate_errors(data_loo)
 
         return data_loo
-
     return (do_loo_cv,)
 
 
@@ -1040,7 +1037,7 @@ def _(mo):
 @app.cell
 def _(data, do_loo_cv, don_run_loo_cv):
     if not don_run_loo_cv.value:
-        data_loo = do_loo_cv(data)
+        data_loo = do_loo_cv(data, n_estimators=600)
     data_loo
     return (data_loo,)
 
@@ -1056,41 +1053,30 @@ def _(mo):
 @app.cell
 def _(ExtraTreesRegressor, RandomizedSearchCV, RepeatedKFold, np, sensors):
     # optimize n_estimators, max_features, bootstrap, criterion, max_depth, min_samples_split, min_samples_leaf
-    # Tune max_features, max_depth, min_samples_leaf together via RandomizedSearchCV or Optuna
+    # Tune max_features, max_depth, min_samples_leaf together via RandomizedSearchCV 
     # Use min_samples_split/min_samples_leaf as your main overfitting control if the model has high variance.
     def do_hyp_opt(data):  
         RANDOM_STATE = 0
+
     
-        # ---------------------------------------------------------------------------
-        # 1. Load your data here
-        # ---------------------------------------------------------------------------
-        # X: shape (100, 8)
-        # y: shape (100, 2)  -> columns are (x_pos, y_pos)
-        #
-        # X = np.load("X.npy")
-        # y = np.load("y.npy")
         X = np.array(data.loc[:,sensors])
         y = np.array(data.loc[:,["x_s", "y_s"]])
-        # ---------------------------------------------------------------------------
-        # 2. Hyperparameter search space
-        #    Biased toward the "obstructed / discontinuous response" regime discussed:
-        #    smaller leaves allowed (preserve sharp transitions), deeper trees allowed,
-        #    more features per split, bootstrap=False.
-        # ---------------------------------------------------------------------------
-        param_dist = {
-            "n_estimators": [400],                         # fixed, not searched
-            "max_depth": [5, 8, 12, 15, None],
-            "min_samples_leaf": [1, 2, 3, 5, 8],
-            "min_samples_split": [2, 4, 8],
-            "max_features": [4, 5, 6, "sqrt", 1.0],
-            "bootstrap": [False, True],                    # keep True as a sanity check
-        }
     
+        # Hyperparameter search space
+        param_dist = {
+            "n_estimators": [600],                        
+            "max_depth": [4, 5, 6, 8, 12, 15, 17, 18, 19, None],
+            "min_samples_leaf": [1, 2, 3, 5, 6, 8, 10, 11, 12],
+            "min_samples_split": [1, 2, 3, 4, 5, 6, 8],
+            "max_features": [1, 2, 3, 4, 5, 6, 7, "sqrt", 8, 9, 10, 12, 13, 14, 15],
+            "bootstrap": [True, False],                   
+        }
+
         # ---------------------------------------------------------------------------
         # 3. Inner loop: hyperparameter selection via RandomizedSearchCV + RepeatedKFold
         # ---------------------------------------------------------------------------
         inner_cv = RepeatedKFold(n_splits=5, n_repeats=10, random_state=RANDOM_STATE)
-    
+
         search = RandomizedSearchCV(
             estimator=ExtraTreesRegressor(random_state=RANDOM_STATE),
             param_distributions=param_dist,
@@ -1101,17 +1087,16 @@ def _(ExtraTreesRegressor, RandomizedSearchCV, RepeatedKFold, np, sensors):
             random_state=RANDOM_STATE,
             refit=True,
         )
-    
+
         search.fit(X, y)
-    
+
         print("Best hyperparameters found:")
         for k, v in search.best_params_.items():
             print(f"  {k}: {v}")
         print(f"Inner CV best score (neg MSE): {search.best_score_:.4f}")
-    
+
         best_model = search.best_estimator_
         return best_model
-
     return (do_hyp_opt,)
 
 
@@ -1165,7 +1150,6 @@ def _(ExtraTreesRegressor, calculate_errors, np, sensors):
 
         calculate_errors(data_test)
         return data_test
-
     return (do_train_test,)
 
 
@@ -1448,13 +1432,14 @@ def _(Ellipse, np, transforms):
 
         ellipse.set_transform(transf + ax.transData)
         return ax.add_patch(ellipse)
-
     return (draw_confidence_ellipse,)
 
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""### UQ""")
+    mo.md(r"""
+    ### UQ
+    """)
     return
 
 
@@ -1481,7 +1466,7 @@ def _(ExtraTreesRegressor, LeaveOneOut, data, mapie, np, sensors):
             for target in ["x_s", "y_s"]:
                 # y_train
                 source_loc = data_loo.loc[train_index, target]
-        
+
                 base_model = ExtraTreesRegressor(n_estimators=n_estimators, random_state=random_state)
 
                 mapie_model = mapie.regression.CrossConformalRegressor(
@@ -1494,12 +1479,12 @@ def _(ExtraTreesRegressor, LeaveOneOut, data, mapie, np, sensors):
                 mapie_model.fit_conformalize(sensor_network_readout, source_loc)
 
                 source_loc_pred, source_loc_pis = mapie_model.predict_interval(sensor_network_readout_test)
-            
+
                 # store prediction of source location on test network readout.
                 data_loo.loc[test_index, target + "_pred"] = source_loc_pred
                 data_loo.loc[test_index, target + "_lo"] = source_loc_pis[0, 0, 0]
                 data_loo.loc[test_index, target + "_hi"] = source_loc_pis[0, 1, 0]
-    
+
         return data_loo
 
     data_loo_jacknife = do_jackknife_plus_loo(data)
@@ -1588,7 +1573,7 @@ def _(
             alpha=0.15,
         )
         ax.add_patch(rect)
-    
+
         for sensor in sensors:
             plt.annotate(
                 f"{sensor_to_nice_int[sensor]}",
@@ -1598,84 +1583,16 @@ def _(
                 ha='left',
                 va='bottom'
             )
-        
+
         handles, labels = plt.gca().get_legend_handles_labels()
         plt.legend(handles[-2:], labels[-2:], bbox_to_anchor=(1.3, 0.5), loc='upper left', borderaxespad=0)
-    
+
         plt.savefig(f"conf_ellipse_jacknife_expt_{exp}.pdf", format="pdf", bbox_inches='tight')
         plt.show()
 
     _exp = 30
     viz_prediction_jacknife(data_loo_jacknife, _exp)
     return
-
-
-@app.cell
-def _(ExtraTreesRegressor, LeaveOneOut, calculate_errors, np, sensors):
-    # a multi-output tree ensemble model. maps 8D vectors to 2D vectors.
-    #  maps sensor network readout to source location
-    def do_loo_cv(
-        data, n_estimators=250, verbose=True, very_verbose=False, uq=True
-    ):
-        data_loo = data.copy()
-        # store predicted source locations in data frame.
-        #  ok bc each data point is test point ONCE.
-        data_loo["x_s_pred"] = np.zeros((len(data)))
-        data_loo["y_s_pred"] = np.zeros((len(data)))
-        if uq:
-            data_loo["ensemble pred source locs"] = [np.zeros(n_estimators) for _ in range(len(data_loo))]
-
-        loo = LeaveOneOut()
-        for i, (_train_index, _test_index) in enumerate(loo.split(data_loo)):
-            # account for non 0, ..., n_row indexing (NaN's dropped for delta learning)
-            train_index = data_loo.index[_train_index]
-            test_index  = data_loo.index[_test_index]
-
-            assert test_index.size == 1
-            if verbose:
-                print("fold :", i, " / ", data.shape[0])
-
-                if very_verbose:
-                    print("\ttest expt: ", test_index)
-                    print("\ttrain expt: ", train_index)
-                    print("\t\ttraining the tree ensemble.")
-
-            # build X_train, y_train
-            sensor_network_readout = data_loo.loc[train_index, sensors]
-            source_locs = data_loo.loc[train_index, ["x_s", "y_s"]]
-
-            # train tree ensemble on training data
-            tree_ensemble = ExtraTreesRegressor(n_estimators=n_estimators)
-            tree_ensemble.fit(sensor_network_readout, source_locs)
-
-            # test tree ensemble on test data
-            # first, build X_test, y_test
-            if very_verbose:
-                print("\t\ttesting the tree ensemble.")
-            sensor_network_readout_test = data_loo.loc[test_index, sensors]
-            source_locs_test_pred = tree_ensemble.predict(sensor_network_readout_test)[0]
-
-            # store prediction of source location on test network readout.
-            data_loo.loc[test_index, "x_s_pred"] = source_locs_test_pred[0]
-            data_loo.loc[test_index, "y_s_pred"] = source_locs_test_pred[1]
-
-            # also store predictions by each tree for UQ
-            for tree in tree_ensemble.estimators_: # back to suppress warning
-                tree.feature_names_in_ = tree_ensemble.feature_names_in_
-
-            if uq:
-                data_loo.loc[test_index, "ensemble pred source locs"] = [
-                    np.array(
-                        [tree.predict(sensor_network_readout_test)[0] for tree in tree_ensemble.estimators_]
-                    )
-                ]
-
-        # DONE! compute and store error = distance from true to predicted source
-        calculate_errors(data_loo)
-
-        return data_loo
-
-    return (do_loo_cv,)
 
 
 @app.cell
@@ -2089,7 +2006,6 @@ def _(ExtraTreesClassifier, LeaveOneOut, np, sensors):
         data_loo["agreement"] = data_loo["background"] == data_loo["pred_safe"]
 
         return data_loo
-
     return (do_loo_cv_classification,)
 
 
@@ -2288,7 +2204,6 @@ def _(bkg_avg, np):
             omega = 4 * np.arctan((alpha * beta) / np.sqrt(1 + alpha**2 + beta**2))
 
             return (S * eff * omega * np.exp(-mu*d)) / 4*np.pi + bkg_avg['16518']
-
     return (response_fun,)
 
 
@@ -2391,7 +2306,6 @@ def _(box_dims, np, response_fun, root_scalar):
         )
         assert root_finding_res.converged
         return root_finding_res.root
-
     return (find_distance_to_detector,)
 
 
@@ -2535,9 +2449,6 @@ def _(
         assert xy_pred[1] >= 0 and xy_pred[1] <= box_dims[1] 
 
         return xy_pred
-
-
-
     return (trad_localize,)
 
 
@@ -2592,7 +2503,6 @@ def _(bkg_avg, data, errors_by_k, np, opt_params, sensors, trad_localize):
             )
 
         return avg_errs
-
     return
 
 
@@ -2645,14 +2555,8 @@ def _(Nds, calculate_errors, data, opt_params, sensors, trad_localize):
 
 
 @app.cell
-def _(data_trad, np):
-    np.mean(data_trad["error"])
-    return
-
-
-@app.cell
-def _(data_trad, np):
-    np.mean(data_trad["error"])
+def _(data_trad, explain_errors):
+    explain_errors(data_loo=data_trad, savename="trad_errors")
     return
 
 
@@ -2696,7 +2600,6 @@ def _(Nds, np, sensor_to_loc):
         game_sensors = select_top_three_sensors(data, exp, sensors, Nds)
         wts = data.loc[exp, game_sensors] / data.loc[exp, game_sensors].sum()
         return np.sum([np.array(sensor_to_loc[sensor]) * wts[sensor] for sensor in game_sensors], axis=0)
-
     return (dumb_triangulation,)
 
 
@@ -3207,7 +3110,6 @@ def _(
         plt.legend(handles[-3:], labels[-3:], bbox_to_anchor=(1.05, 0.65), loc='upper left', borderaxespad=0)
         plt.savefig("tracking_viz.pdf", format="pdf", bbox_inches='tight')
         plt.show()
-
     return (viz_track,)
 
 
@@ -3292,7 +3194,6 @@ def _(np, plot_data, plt):
         plt.ylabel("LOOCV prediction error (in)")
         plt.show()
         return
-
     return (plot_err_vs_var,)
 
 
@@ -3410,7 +3311,6 @@ def _(csv, pd):
             df = pd.DataFrame(rows, columns=new_header)
 
             return df
-
     return (read_variance_outputs,)
 
 
@@ -3429,7 +3329,6 @@ def _(folder_path, n_sensors, os, read_variance_outputs):
             # unique sensors
             assert dataframes[exp]["SN"].nunique() == n_sensors
         return dataframes
-
     return (read_variance_data,)
 
 
@@ -3491,7 +3390,6 @@ def _(np, pd):
                     'CV%':      (vals.std() / vals.mean() * 100) if vals.mean() != 0 else np.nan
                 })
         return pd.DataFrame(records)
-
     return compute_variance_stats, reorganize_by_sn
 
 
