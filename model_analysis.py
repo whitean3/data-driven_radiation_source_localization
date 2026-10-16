@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.14.9"
+__generated_with = "0.17.7"
 app = marimo.App(width="medium")
 
 
@@ -30,6 +30,7 @@ def _():
     import matplotlib as mpl
     import seaborn as sns
     import ptitprince as pt # for raincloud
+    from scipy.stats import chi2
     plt.style.use('rose-pine-dawn.mplstyle') # https://github.com/h4pZ/rose-pine-matplotlib/tree/main/themes
     fm.fontManager.addfont("SourceCodePro-Regular.ttf") # https://fonts.google.com/specimen/Source+Code+Pro
     plt.rcParams["font.family"] = "Source Code Pro"
@@ -55,6 +56,7 @@ def _():
         RepeatedKFold,
         auc,
         average_precision_score,
+        chi2,
         colors,
         csv,
         differential_evolution,
@@ -103,8 +105,7 @@ def _(sns):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(
-        r"""
+    mo.md(r"""
     # ::icon-park:data:: read in sensor network response data
 
     * each data set is the sensor network response to a source in a particular location.
@@ -113,8 +114,7 @@ def _(mo):
     * the list of source locations are below.
 
     ## locations of detectors in the environment
-    """
-    )
+    """)
     return
 
 
@@ -157,8 +157,7 @@ def _(box_dims, n_sensors, np):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(
-        r"""
+    mo.md(r"""
     ## locations of the radioactive source placed in the environment
 
     the first 25 rows come from Latin Hypercube sampling.
@@ -166,8 +165,7 @@ def _(mo):
     the next 25 rows are manually-selected on the corners/boundary.
 
     the remaining 25 are from another round of Latin Hypercube sampling.
-    """
-    )
+    """)
     return
 
 
@@ -186,7 +184,9 @@ def _(box_dims, pd):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""## read in sensor responses""")
+    mo.md(r"""
+    ## read in sensor responses
+    """)
     return
 
 
@@ -260,15 +260,13 @@ def _(detector_outputs):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(
-        r"""
+    mo.md(r"""
     ## re-work data into an ML-friendly format
 
     ::lucide:lightbulb:: source locations paired with sensor network response vectors
 
     first, get list of sensors in the network.
-    """
-    )
+    """)
     return
 
 
@@ -289,7 +287,9 @@ def _(sensor_to_nice_int):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""next, from a sensor network response data frame, extract the count rate of a particular sensor.""")
+    mo.md(r"""
+    next, from a sensor network response data frame, extract the count rate of a particular sensor.
+    """)
     return
 
 
@@ -307,14 +307,12 @@ def _(detector_outputs, np, sensors):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(
-        r"""
+    mo.md(r"""
     🎯 goal:
 
     * each row is an experiment where we place the source at a location and observe the sensor network response
     * the row lists the source location paired with the sensor response vector.
-    """
-    )
+    """)
     return
 
 
@@ -362,13 +360,11 @@ def _(data, np, sensors):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(
-        r"""
+    mo.md(r"""
     ## ::lucide:sailboat:: visually explore the data
 
     first, where are the source locations over all experiments?
-    """
-    )
+    """)
     return
 
 
@@ -503,7 +499,9 @@ def _(data):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""second, visualize the sensor readout and source location for a single experiment.""")
+    mo.md(r"""
+    second, visualize the sensor readout and source location for a single experiment.
+    """)
     return
 
 
@@ -772,7 +770,9 @@ def _(data, viz_source_locs):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""the distribution of the detector responses over all experiments and correlations between them. use a log scale.""")
+    mo.md(r"""
+    the distribution of the detector responses over all experiments and correlations between them. use a log scale.
+    """)
     return
 
 
@@ -920,8 +920,7 @@ def _(data, np, plt, sensor_to_nice_int, sensors, sns):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(
-        r"""
+    mo.md(r"""
     # ☢️ source location predictor
 
     ML task: predict source location from sensor network response
@@ -932,8 +931,7 @@ def _(mo):
     **output**: 2D source location
 
     ## leave-one-out cross validation
-    """
-    )
+    """)
     return
 
 
@@ -1001,7 +999,7 @@ def do_loo_cv(ExtraTreesRegressor, LeaveOneOut, calculate_errors, np, sensors):
             source_locs = data_loo.loc[train_index, ["x_s", "y_s"]]
 
             # train tree ensemble on training data
-            tree_ensemble = ExtraTreesRegressor(n_estimators=n_estimators, min_samples_leaf=1, min_samples_split=3, max_depth=12, max_features=12, bootstrap=False)
+            tree_ensemble = ExtraTreesRegressor(n_estimators=n_estimators)
             tree_ensemble.fit(sensor_network_readout, source_locs)
 
             # test tree ensemble on test data
@@ -1043,14 +1041,16 @@ def _(mo):
 @app.cell
 def _(data, do_loo_cv, don_run_loo_cv):
     if not don_run_loo_cv.value:
-        data_loo = do_loo_cv(data, n_estimators=600)
+        data_loo = do_loo_cv(data, n_estimators=250)
     data_loo
     return (data_loo,)
 
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""## Hyper-parameter Optimization""")
+    mo.md(r"""
+    ## Hyper-parameter Optimization
+    """)
     return
 
 
@@ -1101,7 +1101,7 @@ def _(ExtraTreesRegressor, RandomizedSearchCV, RepeatedKFold):
         for k, v in search.best_params_.items():
             print(f"  {k}: {v}")
         print(f"Inner CV best score (neg MSE): {search.best_score_:.4f}")
-    
+
         return search, search.best_estimator_
     return (do_hyp_opt,)
 
@@ -1121,7 +1121,7 @@ def _(ExtraTreesRegressor, do_hyp_opt, np, sensors, train_test_split):
         default_model.fit(X_train, y_train)
 
         # hp-tuned model
-        search, tuned_model = do_hyp_opt(X_train, y_train, n_iter=250)
+        search, tuned_model = do_hyp_opt(X_train, y_train, n_iter=350)
 
         # predict on test
         y_pred_default = default_model.predict(X_test)
@@ -1129,20 +1129,22 @@ def _(ExtraTreesRegressor, do_hyp_opt, np, sensors, train_test_split):
 
         mae_default = np.mean(np.sqrt((y_pred_default - y_test) ** 2))
         mae_tuned = np.mean(np.sqrt((y_pred_tuned - y_test) ** 2))
-    
+
         print(f"RMSE on source locations (default): {mae_default:.2f} in (tuned): {mae_tuned:.2f} in")
     return (eval_hp_search,)
 
 
 @app.cell
 def _(data, eval_hp_search):
-    y_pred_default, y_pred_tuned = eval_hp_search(data)
+    eval_hp_search(data)
     return
 
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""## batch-level test/train splits""")
+    mo.md(r"""
+    ## batch-level test/train splits
+    """)
     return
 
 
@@ -1187,7 +1189,9 @@ def _(ExtraTreesRegressor, calculate_errors, np, sensors):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""### batch-based train/test split""")
+    mo.md(r"""
+    ### batch-based train/test split
+    """)
     return
 
 
@@ -1214,7 +1218,9 @@ def _(data, do_train_test):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""### grid-based train/test split""")
+    mo.md(r"""
+    ### grid-based train/test split
+    """)
     return
 
 
@@ -1266,7 +1272,9 @@ def _(box_dims, data_grid, plt, setup_environment, viz_sensor_locs):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""analyze error := norm of true source location vector minus predicted source location vector.""")
+    mo.md(r"""
+    analyze error := norm of true source location vector minus predicted source location vector.
+    """)
     return
 
 
@@ -1291,7 +1299,9 @@ def _(data_loo, plt):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""parity plot over cross-validation procedure.""")
+    mo.md(r"""
+    parity plot over cross-validation procedure.
+    """)
     return
 
 
@@ -1461,13 +1471,15 @@ def _(Ellipse, np, transforms):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""### UQ""")
+    mo.md(r"""
+    ### UQ
+    """)
     return
 
 
 @app.cell
 def _(ExtraTreesRegressor, LeaveOneOut, data, mapie, np, sensors):
-    def do_jackknife_plus_loo(data, n_estimators=100, alpha=0.2, random_state=0):
+    def do_jackknife_plus_loo(data, n_estimators=100, alpha=0.1, random_state=0):
         data_loo = data.copy()
         for sl in ["x_s", "y_s"]:
             data_loo[sl + "_pred"] = np.zeros((len(data)))
@@ -1510,7 +1522,7 @@ def _(ExtraTreesRegressor, LeaveOneOut, data, mapie, np, sensors):
         return data_loo
 
     data_loo_jacknife = do_jackknife_plus_loo(data)
-    return (data_loo_jacknife,)
+    return data_loo_jacknife, do_jackknife_plus_loo
 
 
 @app.cell
@@ -1525,12 +1537,34 @@ def _(data_loo_jacknife, np, plt):
         data_loo[target + "_pi_width"] = data_loo[target + "_hi"] - data_loo[target + "_lo"]
         data_loo[target + "_error"] = np.abs(data_loo[target + "_pred"] - data_loo[target])
 
-        plt.figure()
-        plt.xlabel("width of prediction interval [in]")
+        width = data_loo[target + "_pi_width"].values
+        error = data_loo[target + "_error"].values
+
+        mask = np.isfinite(width) & np.isfinite(error)
+        a, b = np.polyfit(width[mask], error[mask], 1)
+
+        y_pred = a * width[mask] + b
+        ss_res = np.sum((error[mask] - y_pred) ** 2)
+        ss_tot = np.sum((error[mask] - np.mean(error[mask])) ** 2)
+        r2 = 1 - ss_res / ss_tot
+        print(f"{target}: slope = {a:.4f}, intercept = {b:.4f}, R^2 = {r2:.3f}")
+
+        # Shared limits for both axes
+        lim_max = 1.05 * max(width[mask].max(), error[mask].max())
+        lim = (0, lim_max)
+
+        xline = np.linspace(*lim, 100)
+        plt.figure(figsize=(6, 6))
+        plt.xlabel(f"width of {target[0]} prediction interval [in]")
         plt.ylabel("prediction error [in]")
-        plt.scatter(data_loo[target + "_pi_width"], data_loo[target + "_error"])
-        # plt.gca().set_aspect('equal', 'box')
-        plt.savefig(f"jacknife_piw_error_correlation_{target}.pdf", format="pdf")
+        plt.scatter(width, error)
+        plt.plot(xline, a * xline + b, linestyle="dashed", color="black",
+                 label=f"$R^2$ = {r2:.3f}")
+        plt.xlim(lim)
+        plt.ylim(lim)
+        plt.gca().set_aspect("equal","box")
+        plt.legend()
+        plt.savefig(f"jacknife_piw_error_correlation_{target}.pdf", format="pdf", bbox_inches='tight')
         plt.show()
 
     for _target in ["x_s", "y_s"]:
@@ -1699,9 +1733,243 @@ def _(
     return
 
 
+@app.cell
+def _(
+    box_dims,
+    data_loo,
+    data_loo_jacknife,
+    draw_confidence_ellipse,
+    draw_obstacles,
+    np,
+    patches,
+    plt,
+    sensor_colormap,
+    sensor_to_loc,
+    sensor_to_nice_int,
+    sensors,
+    setup_environment,
+    theme_colors,
+    thing_to_color,
+):
+    def show_both(data_loo, data_loo_jacknife, exp, n_samples=25, incl_ellipse=True):
+        max_response = 75.0 
+
+        fig, ax = setup_environment(box_dims)
+        draw_obstacles(ax)
+
+        # source locs. color by error.
+        plt.scatter(
+            data_loo.loc[exp, "x_s"], data_loo.loc[exp, "y_s"],
+            clip_on=False, edgecolors="black", color=theme_colors[4],
+            s=65, marker="o",
+            label="true\nsource\nlocation"
+        )
+
+        # plot sensors
+        plt.scatter(
+            [sensor_to_loc[sensor][0] for sensor in sensors],
+            [sensor_to_loc[sensor][1] for sensor in sensors],
+            s=50, edgecolor="black", marker="s",
+            clip_on=False,
+            c=[data_loo.loc[exp, sensor] for sensor in sensors],
+            vmin=0,
+            vmax=max_response,
+            label="sensor",
+            cmap=sensor_colormap
+        )
+
+        plt.colorbar(label="count rate [CPS]", extend="max")
+
+        # viz uncertainty quantification by looking at whole ensemble.
+        xs_preds = np.array([xs[0] for xs in data_loo.loc[exp, "ensemble pred source locs"]])
+        ys_preds = np.array([xs[1] for xs in data_loo.loc[exp, "ensemble pred source locs"]])
+        if n_samples > 0:
+            """
+            # plot samples of predicted responses
+            ids_trees = np.random.choice(np.arange(len(xs_preds)), n_samples)
+            plt.scatter(
+                xs_preds[ids_trees],
+                ys_preds[ids_trees],
+                marker="+", color=thing_to_color["pred source loc"], 
+                s=65,
+                label="predicted\nsource\nlocation\nsample", clip_on=False
+            )
+            """
+        if incl_ellipse:
+            draw_confidence_ellipse(xs_preds, ys_preds, ax, facecolor=thing_to_color["pred source loc"], alpha=0.2)
+            draw_confidence_ellipse(xs_preds, ys_preds, ax, n_std=2.0, facecolor=thing_to_color["pred source loc"], alpha=0.2)
+
+
+        # viz uncertainty quantification
+        width  = data_loo_jacknife.loc[exp, "x_s_hi"] - data_loo_jacknife.loc[exp, "x_s_lo"]
+        height = data_loo_jacknife.loc[exp, "y_s_hi"] - data_loo_jacknife.loc[exp, "y_s_lo"]
+
+        rect = patches.Rectangle(
+            (data_loo_jacknife.loc[exp, "x_s_lo"], data_loo_jacknife.loc[exp, "y_s_lo"]),   # bottom-left corner
+            width, height,
+            linewidth=1.5,
+            edgecolor=thing_to_color["pred source loc"],
+            facecolor=thing_to_color["pred source loc"],
+            alpha=0.15,
+        )
+        ax.add_patch(rect)
+
+        for sensor in sensors:
+                plt.annotate(
+                    f"{sensor_to_nice_int[sensor]}",
+                    (sensor_to_loc[sensor][0], sensor_to_loc[sensor][1]),
+                    xytext=(5, 5),
+                    textcoords="offset points", 
+                    ha='left',
+                    va='bottom'
+                )
+        handles, labels = plt.gca().get_legend_handles_labels()
+        plt.legend(handles[-2:], labels[-2:], bbox_to_anchor=(1.3, 0.5), loc='upper left', borderaxespad=0)
+        plt.savefig("conf_ellipse.pdf", format="pdf", bbox_inches='tight')
+        plt.show()
+    _exp=12
+    show_both(data_loo, data_loo_jacknife, _exp, n_samples=25)
+    return
+
+
+@app.cell
+def _(data_loo, data_loo_jacknife, np, plt):
+    jackknife_areas = []
+    ellipse_areas = []
+    for _exp in range(len(data_loo_jacknife)):
+        # jackknife_areas
+        width  = data_loo_jacknife.loc[_exp, "x_s_hi"] - data_loo_jacknife.loc[_exp, "x_s_lo"]
+        height = data_loo_jacknife.loc[_exp, "y_s_hi"] - data_loo_jacknife.loc[_exp, "y_s_lo"]
+        jackknife_areas.append(width*height)
+
+        # ellipse areas
+        x = np.array([xs[0] for xs in data_loo.loc[_exp, "ensemble pred source locs"]])
+        y = np.array([xs[1] for xs in data_loo.loc[_exp, "ensemble pred source locs"]])
+
+        cov = np.cov(x, y)
+        pearson = cov[0, 1]/np.sqrt(cov[0, 0] * cov[1, 1])
+
+        ell_radius_x = np.sqrt(1 + pearson)
+        ell_radius_y = np.sqrt(1 - pearson)
+
+        scale_x = np.sqrt(cov[0, 0]) * 2
+        scale_y = np.sqrt(cov[1, 1]) * 2
+
+
+        ellipse_areas.append(np.pi * np.sqrt(1 - pearson**2) * scale_x * scale_y)
+
+    plt.hist(jackknife_areas, bins=int(max(jackknife_areas)/20), alpha=0.5, label='jackknife')
+    plt.hist(ellipse_areas, bins=int(max(ellipse_areas)/20), alpha=0.5, label='std of trees')
+    plt.xlabel("area of PI")
+    plt.legend()
+    plt.show()
+    return ellipse_areas, jackknife_areas
+
+
+@app.cell
+def _(ellipse_areas, jackknife_areas, np, plt):
+    from scipy import stats
+    def plot_jk_std():
+        x = np.asarray(jackknife_areas)
+        y = np.asarray(ellipse_areas)
+
+        # Linear fit
+        res = stats.linregress(x, y)
+        r2 = res.rvalue ** 2
+
+        # Fit line across the data range
+        x_fit = np.linspace(x.min(), x.max(), 100)
+        y_fit = res.slope * x_fit + res.intercept
+
+        plt.scatter(x, y)
+        plt.plot(x_fit, y_fit, "--", color="black",
+                 label=f"fit: y = {res.slope:.3g}x + {res.intercept:.3g}\n$R^2$ = {r2:.3f}")
+
+        plt.xlabel("jackknife PI area")
+        plt.ylim(min(ellipse_areas),max(ellipse_areas))
+        plt.xlim(min(ellipse_areas),max(ellipse_areas))
+        plt.ylabel("std of trees ellipse area")
+        plt.legend()
+        plt.show()
+
+    plot_jk_std()
+    return (stats,)
+
+
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""### sensor importance""")
+    mo.md(r"""
+    ## Empirical Coverage Probability
+    """)
+    return
+
+
+@app.cell
+def _(np):
+    def point_in_confidence_ellipse(x, y, true_point, n_std=1.0):
+        mean = np.array([np.mean(x), np.mean(y)])
+        cov = np.cov(x, y)                      # same as in your draw function
+        d = np.asarray(true_point) - mean
+        m2 = d @ np.linalg.solve(cov, d)
+        return m2 <= n_std**2
+    
+    def empirical_coverage(xs, ys, truths, n_std=1.0):
+        inside = [
+            point_in_confidence_ellipse(x, y, t, n_std)
+            for x, y, t in zip(xs, ys, truths)
+        ]
+        return np.mean(inside)
+    return (empirical_coverage,)
+
+
+@app.cell
+def _(data_loo, np):
+    locs_col = data_loo["ensemble pred source locs"]
+
+    xs = [np.array([p[0] for p in locs]) for locs in locs_col]
+    ys = [np.array([p[1] for p in locs]) for locs in locs_col]
+
+    truths = data_loo[["x_s", "y_s"]].to_numpy()  
+    return truths, xs, ys
+
+
+@app.cell
+def _(np):
+    np.divide(list(range(1,31)), 10)
+    return
+
+
+@app.cell
+def _(chi2, empirical_coverage, np, truths, xs, ys):
+    n_stds = np.divide(list(range(1,31)), 10)
+    expected = []
+    empirical = []
+    for n_std in n_stds:
+        expected.append(chi2.cdf(n_std**2, df=2))  # 1: 39.3%, 2: 86.5%, 3: 98.9%
+        empirical.append(empirical_coverage(xs, ys, truths, n_std))
+        print("# Standard Deviations:", n_std)
+        print("\tExpected Coverage:", round(expected[-1]*100, ndigits=1), '%')
+        print("\tEmpirical Coverage:", empirical[-1]*100, '%')
+
+    return empirical, expected, n_stds
+
+
+@app.cell
+def _(empirical, expected, n_stds, plt):
+    plt.plot(n_stds, expected, label='expected')
+    plt.plot(n_stds, empirical, label='empirical')
+    plt.xlabel("n_std")
+    plt.ylabel("Coverage fraction")
+    plt.legend()
+    plt.show()
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### sensor importance
+    """)
     return
 
 
@@ -1840,7 +2108,9 @@ def _(
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""## learning curve""")
+    mo.md(r"""
+    ## learning curve
+    """)
     return
 
 
@@ -1896,15 +2166,13 @@ def _(learning_curve, plt, run_learning_curve):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(
-        r"""
+    mo.md(r"""
     # ☢️ source presence classifier
 
     distinguish source presence from background.
 
     ##  background data
-    """
-    )
+    """)
     return
 
 
@@ -1965,7 +2233,9 @@ def _(data_bkg):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""classification. concatentate the background with non-background.""")
+    mo.md(r"""
+    classification. concatentate the background with non-background.
+    """)
     return
 
 
@@ -2131,7 +2401,9 @@ def _(
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""viz the ones we got wrong""")
+    mo.md(r"""
+    viz the ones we got wrong
+    """)
     return
 
 
@@ -2157,25 +2429,21 @@ def _(data_loo_c, disagreement_selector, viz_sensor_readout):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(
-        r"""
+    mo.md(r"""
     # ☢️ traditional least squares estimation of the source location
 
     first, calibrate a curve that gives sensor response to the source as a function of distance from the source.
-    """
-    )
+    """)
     return
 
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(
-        r"""
+    mo.md(r"""
     ## calibration curve
 
     output of sensor as a function of distance from source.
-    """
-    )
+    """)
     return
 
 
@@ -2205,7 +2473,9 @@ def _(np, pd):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""### fit detector response function to data""")
+    mo.md(r"""
+    ### fit detector response function to data
+    """)
     return
 
 
@@ -2301,13 +2571,11 @@ def _(output_distance_data):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(
-        r"""
+    mo.md(r"""
     ### retreive distance from detector output
 
     second, given a sensor's reading, predict the distance of the source from it. this puts a circle around the sensor.
-    """
-    )
+    """)
     return
 
 
@@ -2337,13 +2605,11 @@ def _(find_distance_to_detector, opt_params):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(
-        r"""
+    mo.md(r"""
     ## least squares estimator for location of source
 
     third, given the response of the sensor network, select the subset of sensors that come into play with a detectable response.
-    """
-    )
+    """)
     return
 
 
@@ -2369,7 +2635,9 @@ def _(Nds, data, sensors):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""some of the experiments led to no detectable response for ANY sensor. these are false negatives.""")
+    mo.md(r"""
+    some of the experiments led to no detectable response for ANY sensor. these are false negatives.
+    """)
     return
 
 
@@ -2382,7 +2650,9 @@ def _(Nds, data, sensors):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""when a SINGLE sensor in the network elicits a warning, we consider that a positive. but we need three for triangulation. so we select the top three sensors in terms of response from baseline.""")
+    mo.md(r"""
+    when a SINGLE sensor in the network elicits a warning, we consider that a positive. but we need three for triangulation. so we select the top three sensors in terms of response from baseline.
+    """)
     return
 
 
@@ -2402,7 +2672,9 @@ def _(Nds, data, sensors):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""finally, the traditional localization method that finds source location most consistent with the "measured" distance. here measured means we look at the response and infer the distance from the calibration curve. now we search for source location that is most consistent with those distances we measure.""")
+    mo.md(r"""
+    finally, the traditional localization method that finds source location most consistent with the "measured" distance. here measured means we look at the response and infer the distance from the calibration curve. now we search for source location that is most consistent with those distances we measure.
+    """)
     return
 
 
@@ -2542,7 +2814,9 @@ def _(Nds, data, opt_params, sensors, trad_localize):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""🥞 let's do it!""")
+    mo.md(r"""
+    🥞 let's do it!
+    """)
     return
 
 
@@ -2600,13 +2874,11 @@ def _(data_loo, data_trad):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(
-        r"""
+    mo.md(r"""
     ## ☢️ a sub-baseline: simple triangulation
 
     weighted average of significant sensor locations.
-    """
-    )
+    """)
     return
 
 
@@ -2640,7 +2912,9 @@ def _(calculate_errors, data, dumb_triangulation, opt_params, sensors):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""Vizualizes the source locations where no solution was able to be found b/c no significant sensors""")
+    mo.md(r"""
+    Vizualizes the source locations where no solution was able to be found b/c no significant sensors
+    """)
     return
 
 
@@ -2653,7 +2927,9 @@ def _(data, data_trad, np, viz_source_locs):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""...when the errors are huge.""")
+    mo.md(r"""
+    ...when the errors are huge.
+    """)
     return
 
 
@@ -2667,7 +2943,9 @@ def _(data, data_trad, viz_source_locs):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""## compare errors among methods""")
+    mo.md(r"""
+    ## compare errors among methods
+    """)
     return
 
 
@@ -2761,9 +3039,77 @@ def _(data_rand, learning_curve, plt, theme_colors):
     return
 
 
+@app.cell
+def _(mo):
+    mo.md(r"""
+    #### P-test between ERT ensemble and multilateration
+    """)
+    return
+
+
+@app.cell
+def _(np):
+    def paired_bootstrap_test(errors_a, errors_b, n_boot=10_000, seed=0):
+        """
+        Paired bootstrap test on per-example errors of two models.
+        H0: mean error of A == mean error of B.
+        """
+        a = np.asarray(errors_a, dtype=float)
+        b = np.asarray(errors_b, dtype=float)
+        assert a.shape == b.shape
+
+        d = a - b                     
+        n = len(d)
+        observed = d.mean()
+
+        rng = np.random.default_rng(seed)
+        idx = rng.integers(0, n, size=(n_boot, n))
+        boot_means = d[idx].mean(axis=1)
+
+        ci = np.percentile(boot_means, [2.5, 97.5])
+
+        null_dist = boot_means - observed
+
+        p_two_sided = (np.sum(np.abs(null_dist) >= abs(observed)) + 1) / (n_boot + 1)
+
+
+        return {
+            "mean_diff": observed,
+            "ci_95": tuple(ci),
+            "p_two_sided": p_two_sided,
+        }
+    return (paired_bootstrap_test,)
+
+
+@app.cell
+def _(all_errors, paired_bootstrap_test):
+    ert_errors = all_errors[all_errors["method"] == 'ERT\nensemble']["error"] 
+    mtl_errors = all_errors[all_errors["method"] == 'multilateration']["error"] 
+    paired_bootstrap_test(ert_errors, mtl_errors)
+    return ert_errors, mtl_errors
+
+
+@app.cell
+def _(ert_errors, mtl_errors, np, plt):
+    err_diff= np.array(mtl_errors)-np.array(ert_errors)
+    plt.hist(err_diff, bins=100)
+    plt.show()
+    return
+
+
+@app.cell
+def _(ert_errors, mtl_errors, plt):
+    plt.hist(ert_errors, alpha=0.8, bins=int(max(ert_errors)))
+    plt.hist(mtl_errors, alpha=0.8, bins=int(max(mtl_errors)))
+    plt.show()
+    return
+
+
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""# 🚓 tracking""")
+    mo.md(r"""
+    # 🚓 tracking
+    """)
     return
 
 
@@ -2881,6 +3227,36 @@ def _(np, sensors, tracking_15s_data, tree_ensemble):
 
 
     _()
+    return
+
+
+@app.cell
+def _(tracking_15s_data_pred):
+    tracking_15s_data_pred
+    return
+
+
+@app.cell
+def _(do_jackknife_plus_loo, tracking_15s_data_pred):
+    do_jackknife_plus_loo(tracking_15s_data_pred)
+    return
+
+
+@app.cell
+def _(do_jackknife_plus_loo, tracking_data_pred):
+    tracking_data_pred_jk = do_jackknife_plus_loo(tracking_data_pred)
+    return (tracking_data_pred_jk,)
+
+
+@app.cell
+def _(do_jackknife_plus_loo, tracking_15s_data_pred):
+    tracking_data_pred_jk_15 = do_jackknife_plus_loo(tracking_15s_data_pred)
+    return
+
+
+@app.cell
+def _(tracking_data_pred_jk):
+    tracking_data_pred_jk
     return
 
 
@@ -3149,7 +3525,9 @@ def _(
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""### Plot Error vs Variance""")
+    mo.md(r"""
+    ### Plot Error vs Variance
+    """)
     return
 
 
@@ -3186,18 +3564,34 @@ def _(np, plot_data, plt):
             if exp != 64:
                 xs_preds = np.array([xs[0] for xs in plot_data.loc[exp, "ensemble pred source locs"]])
                 ys_preds = np.array([xs[1] for xs in plot_data.loc[exp, "ensemble pred source locs"]])
-                x_var = np.var(xs_preds)
-                y_var = np.var(ys_preds)
-                avg_vars.append((x_var+y_var)/2)
+                x_var = np.std(xs_preds)
+                y_var = np.std(ys_preds)
+                avg_vars.append((x_var + y_var) / 2)
 
-
+        avg_vars = np.array(avg_vars)
         error = plot_data["error"].values
+
+        # Linear fit
         a, b = np.polyfit(avg_vars, error, 1)
-        print(a,b)
-        plt.scatter(avg_vars,error)
-        plt.plot(range(0,150), a*range(0,150) + b, linestyle="dashed", color='black')
-        plt.xlabel("Variance Across Trees (in)")
+        print(a, b)
+
+        # R^2
+        y_pred = a * avg_vars + b
+        ss_res = np.sum((error - y_pred) ** 2)
+        ss_tot = np.sum((error - np.mean(error)) ** 2)
+        r2 = 1 - ss_res / ss_tot
+        print(f"R^2 = {r2:.3f}")
+
+        # Plot
+        xline = np.linspace(0, 20, 20)
+        plt.scatter(avg_vars, error)
+        plt.xlim(0,20)
+        plt.ylim(0,20)
+        plt.plot(xline, a * xline + b, linestyle="dashed", color="black",
+                 label=f"$R^2$ = {r2:.3f}")
+        plt.xlabel("Std Across Trees (in)")
         plt.ylabel("LOOCV prediction error (in)")
+        plt.legend()
         plt.show()
         return
     return (plot_err_vs_var,)
@@ -3288,12 +3682,10 @@ def _(data_loo, np, plt):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(
-        r"""
+    mo.md(r"""
     # positional variance of detector readout
     (with a source present)
-    """
-    )
+    """)
     return
 
 
@@ -3474,7 +3866,7 @@ def _(
             s=250, cmap="plasma", edgecolor="k"
         )
         plt.colorbar(label="average\ncoefficient of variation [%]\nof sensor responses")
-        plt.savefig("CV_sensor_response.pdf", format="pdf")
+        plt.savefig("CV_sensor_response.pdf", format="pdf", bbox_inches='tight')
         plt.show()
 
     viz_response_relative_variance(averaged_positional_stats)
@@ -3483,7 +3875,9 @@ def _(
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""### study of how sensor noise affects prediction variance""")
+    mo.md(r"""
+    ### study of how sensor noise affects prediction variance
+    """)
     return
 
 
@@ -3564,15 +3958,35 @@ def _(np, pd, pred_new_test):
 
 
 @app.cell
-def _(averaged_positional_stats, pd, plt, std_d_from_mean_pred):
-    corr_pred_input_noise = pd.merge(std_d_from_mean_pred, averaged_positional_stats, on="region")
+def _(averaged_positional_stats, np, pd, plt, stats, std_d_from_mean_pred):
+    def plot_pred_readout_var():
+        corr_pred_input_noise = pd.merge(std_d_from_mean_pred, averaged_positional_stats, on="region")
 
-    plt.figure()
-    plt.scatter(corr_pred_input_noise["CV%"], corr_pred_input_noise["std_d_from_mean_pred"])
-    plt.xlabel("average CV of\nsensor network readout [%]")
-    plt.ylabel("STD of predicted\nsource position [in]")
-    plt.savefig("correlate_sensor_noise_and_prediction_noise.pdf", format="pdf")
-    plt.show()
+        x = corr_pred_input_noise["CV%"].to_numpy(dtype=float)
+        y = corr_pred_input_noise["std_d_from_mean_pred"].to_numpy(dtype=float)
+
+        # Drop NaNs so linregress doesn't return NaN
+        mask = np.isfinite(x) & np.isfinite(y)
+        x, y = x[mask], y[mask]
+    
+        # Linear fit
+        res = stats.linregress(x, y)
+        r2 = res.rvalue ** 2
+    
+        x_fit = np.linspace(x.min(), x.max(), 100)
+        y_fit = res.slope * x_fit + res.intercept
+
+        plt.figure()
+        plt.scatter(x, y)
+        plt.plot(x_fit, y_fit, "--", color="black",
+        label=f"fit: y = {res.slope:.3g}x + {res.intercept:.3g}\n$R^2$ = {r2:.3f}")
+    
+        plt.xlabel("average CV of\nsensor network readout [%]")
+        plt.ylabel("STD of predicted\nsource position [in]")
+        plt.legend()
+        plt.savefig("correlate_sensor_noise_and_prediction_noise.pdf", format="pdf",bbox_inches="tight")
+        plt.show()
+    plot_pred_readout_var()
     return
 
 
@@ -3594,6 +4008,85 @@ def _(plt, pred_new_test, pred_std_due_to_sensor_noise):
     plt.hist(pred_new_test["error_y"], density=True)
     plt.hist(pred_std_due_to_sensor_noise["STD of y_s_pred"], density=True, alpha=0.5)
     plt.show()
+    return
+
+
+@app.cell
+def _(pred_new_test):
+    pred_new_test.groupby('region').mean()["error"]
+    return
+
+
+@app.cell
+def _(np, plt, pred_new_test, pred_std_due_to_sensor_noise, stats):
+    def plot_err_by_var():
+    
+        x = np.array(pred_new_test.groupby('region').mean()["error"])
+        y = np.array(pred_std_due_to_sensor_noise["STD of y_s_pred"])
+    
+        # Drop NaNs so linregress doesn't return NaN
+        mask = np.isfinite(x) & np.isfinite(y)
+        x, y = x[mask], y[mask]
+    
+        # Linear fit
+        res = stats.linregress(x, y)
+        r2 = res.rvalue ** 2
+    
+        x_fit = np.linspace(x.min(), x.max(), 100)
+        y_fit = res.slope * x_fit + res.intercept
+
+        plt.figure()
+        plt.scatter(x, y)
+        plt.plot(x_fit, y_fit, "--", color="black",
+        label=f"fit: y = {res.slope:.3g}x + {res.intercept:.3g}\n$R^2$ = {r2:.3f}")
+
+        plt.xlabel("mean prediction error [in]")
+        plt.ylabel("STD of predicted\nsource position [in]")
+        plt.legend()
+        plt.savefig("correlate_prediction_variance_with_error.pdf", format="pdf", bbox_inches="tight")
+        plt.show()
+    plot_err_by_var()
+    return
+
+
+@app.cell
+def _(
+    averaged_positional_stats,
+    np,
+    pd,
+    plt,
+    pred_new_test,
+    stats,
+    std_d_from_mean_pred,
+):
+    def plot_meas_err_by_var():
+        corr_pred_input_noise = pd.merge(std_d_from_mean_pred, averaged_positional_stats, on="region")
+    
+        x = np.array(pred_new_test.groupby('region').mean()["error"])
+        y = corr_pred_input_noise["CV%"].to_numpy(dtype=float)
+    
+        # Drop NaNs so linregress doesn't return NaN
+        mask = np.isfinite(x) & np.isfinite(y)
+        x, y = x[mask], y[mask]
+    
+        # Linear fit
+        res = stats.linregress(x, y)
+        r2 = res.rvalue ** 2
+    
+        x_fit = np.linspace(x.min(), x.max(), 100)
+        y_fit = res.slope * x_fit + res.intercept
+
+        plt.figure()
+        plt.scatter(x, y)
+        plt.plot(x_fit, y_fit, "--", color="black",
+        label=f"fit: y = {res.slope:.3g}x + {res.intercept:.3g}\n$R^2$ = {r2:.3f}")
+
+        plt.xlabel("mean prediction error [in]")
+        plt.ylabel("average CV of\nsensor network readout [%]")
+        plt.legend()
+        plt.savefig("correlate_measurement_variance_with_error.pdf", format="pdf", bbox_inches="tight")
+        plt.show()
+    plot_meas_err_by_var()
     return
 
 
