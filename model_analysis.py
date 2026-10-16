@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.17.7"
+__generated_with = "0.14.9"
 app = marimo.App(width="medium")
 
 
@@ -105,7 +105,8 @@ def _(sns):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
+    mo.md(
+        r"""
     # ::icon-park:data:: read in sensor network response data
 
     * each data set is the sensor network response to a source in a particular location.
@@ -114,7 +115,8 @@ def _(mo):
     * the list of source locations are below.
 
     ## locations of detectors in the environment
-    """)
+    """
+    )
     return
 
 
@@ -157,7 +159,8 @@ def _(box_dims, n_sensors, np):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
+    mo.md(
+        r"""
     ## locations of the radioactive source placed in the environment
 
     the first 25 rows come from Latin Hypercube sampling.
@@ -165,7 +168,8 @@ def _(mo):
     the next 25 rows are manually-selected on the corners/boundary.
 
     the remaining 25 are from another round of Latin Hypercube sampling.
-    """)
+    """
+    )
     return
 
 
@@ -184,9 +188,7 @@ def _(box_dims, pd):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
-    ## read in sensor responses
-    """)
+    mo.md(r"""## read in sensor responses""")
     return
 
 
@@ -260,13 +262,15 @@ def _(detector_outputs):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
+    mo.md(
+        r"""
     ## re-work data into an ML-friendly format
 
     ::lucide:lightbulb:: source locations paired with sensor network response vectors
 
     first, get list of sensors in the network.
-    """)
+    """
+    )
     return
 
 
@@ -287,9 +291,7 @@ def _(sensor_to_nice_int):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
-    next, from a sensor network response data frame, extract the count rate of a particular sensor.
-    """)
+    mo.md(r"""next, from a sensor network response data frame, extract the count rate of a particular sensor.""")
     return
 
 
@@ -307,12 +309,14 @@ def _(detector_outputs, np, sensors):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
+    mo.md(
+        r"""
     🎯 goal:
 
     * each row is an experiment where we place the source at a location and observe the sensor network response
     * the row lists the source location paired with the sensor response vector.
-    """)
+    """
+    )
     return
 
 
@@ -360,11 +364,13 @@ def _(data, np, sensors):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
+    mo.md(
+        r"""
     ## ::lucide:sailboat:: visually explore the data
 
     first, where are the source locations over all experiments?
-    """)
+    """
+    )
     return
 
 
@@ -499,9 +505,7 @@ def _(data):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
-    second, visualize the sensor readout and source location for a single experiment.
-    """)
+    mo.md(r"""second, visualize the sensor readout and source location for a single experiment.""")
     return
 
 
@@ -770,9 +774,7 @@ def _(data, viz_source_locs):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
-    the distribution of the detector responses over all experiments and correlations between them. use a log scale.
-    """)
+    mo.md(r"""the distribution of the detector responses over all experiments and correlations between them. use a log scale.""")
     return
 
 
@@ -920,7 +922,8 @@ def _(data, np, plt, sensor_to_nice_int, sensors, sns):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
+    mo.md(
+        r"""
     # ☢️ source location predictor
 
     ML task: predict source location from sensor network response
@@ -931,7 +934,8 @@ def _(mo):
     **output**: 2D source location
 
     ## leave-one-out cross validation
-    """)
+    """
+    )
     return
 
 
@@ -1048,15 +1052,13 @@ def _(data, do_loo_cv, don_run_loo_cv):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
-    ## Hyper-parameter Optimization
-    """)
+    mo.md(r"""## Hyper-parameter Optimization""")
     return
 
 
 @app.cell
 def _(mo):
-    don_run_hp_opt = mo.ui.checkbox(label="don't run LOO CV?", value=False)
+    don_run_hp_opt = mo.ui.checkbox(label="don't run LOO CV?", value=True)
     don_run_hp_opt
     return
 
@@ -1142,9 +1144,7 @@ def _(data, eval_hp_search):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
-    ## batch-level test/train splits
-    """)
+    mo.md(r"""## batch-level test/train splits""")
     return
 
 
@@ -1189,9 +1189,7 @@ def _(ExtraTreesRegressor, calculate_errors, np, sensors):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
-    ### batch-based train/test split
-    """)
+    mo.md(r"""### batch-based train/test split""")
     return
 
 
@@ -1203,6 +1201,10 @@ def _(data, do_train_test):
     )
     data_train_B12 = do_train_test(
         data[data["batch ID"].isin([1, 2])],
+        data.groupby("batch ID").get_group(4)
+    )
+    data_train_B123 = do_train_test(
+        data[data["batch ID"].isin([1, 2, 3])],
         data.groupby("batch ID").get_group(4)
     )
     data_train_B13 = do_train_test(
@@ -1218,9 +1220,7 @@ def _(data, do_train_test):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
-    ### grid-based train/test split
-    """)
+    mo.md(r"""### grid-based train/test split""")
     return
 
 
@@ -1252,18 +1252,29 @@ def _(data, do_train_test, pd):
 
 
 @app.cell
-def _(box_dims, data_grid, plt, setup_environment, viz_sensor_locs):
+def _():
+    return
+
+
+@app.cell
+def _(box_dims, data_grid, np, plt, setup_environment, viz_sensor_locs):
     def viz_grid_test_train_split(data_grid):
         print("mean error [in] over grid cells: ", data_grid["error"].mean())
+        assert data_grid["grid ID"].max() == 8
 
         fig, ax = setup_environment(box_dims)
 
         viz_sensor_locs(ax)
-
-        # for g in range(data_grid["grid ID"].max()):
+        n_grid = 3
+        x_grid = np.linspace(0, box_dims[0], n_grid+1)
+        y_grid = np.linspace(0, box_dims[1], n_grid+1)
+        for i in range(1, n_grid):
+            plt.axvline(x_grid[i], linestyle="--", color="k")
+            plt.axhline(y_grid[i], linestyle="--", color="k")
+    
         plt.scatter(data_grid["x"], data_grid["y"], c=data_grid["error"], s=250, cmap="plasma", edgecolor="k")
         plt.colorbar(label="error [in]")
-
+        plt.savefig("grid_CV.pdf", format="pdf")
         plt.show()
 
     viz_grid_test_train_split(data_grid)
@@ -1272,9 +1283,7 @@ def _(box_dims, data_grid, plt, setup_environment, viz_sensor_locs):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
-    analyze error := norm of true source location vector minus predicted source location vector.
-    """)
+    mo.md(r"""analyze error := norm of true source location vector minus predicted source location vector.""")
     return
 
 
@@ -1299,15 +1308,13 @@ def _(data_loo, plt):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
-    parity plot over cross-validation procedure.
-    """)
+    mo.md(r"""parity plot over cross-validation procedure.""")
     return
 
 
 @app.cell
 def _(box_dims, data_loo, np, plt):
-    def xy_parity_plot(data, save=False, suptitle=None):
+    def xy_parity_plot(data, suptitle=None, savename=None):
         print("mean error [in]: ", np.mean(data['error']))
 
         f, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 5))  # explicit figure size helps
@@ -1344,11 +1351,12 @@ def _(box_dims, data_loo, np, plt):
         ax1.legend(title=f"error = {x_err:.2f} in", loc='upper left')
         ax2.legend(title=f"error = {y_err:.2f} in", loc='upper left')
 
-        if save:
-            plt.savefig("XY_reg_parity.pdf", format="pdf", bbox_inches='tight')
+        if savename is None:
+            savename = suptitle
+        plt.savefig(savename + ".pdf", format="pdf", bbox_inches='tight')
         plt.show()
 
-    xy_parity_plot(data_loo, save=True)
+    xy_parity_plot(data_loo, savename="XY_reg_parity")
     return (xy_parity_plot,)
 
 
@@ -1361,6 +1369,12 @@ def _(data_train_B1, xy_parity_plot):
 @app.cell
 def _(data_train_B12, xy_parity_plot):
     xy_parity_plot(data_train_B12, suptitle="train B1&2, test B4")
+    return
+
+
+@app.cell
+def _(data_train_B123, xy_parity_plot):
+    xy_parity_plot(data_train_B123, suptitle="train B1&2&3, test B4")
     return
 
 
@@ -1471,9 +1485,7 @@ def _(Ellipse, np, transforms):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
-    ### UQ
-    """)
+    mo.md(r"""### UQ""")
     return
 
 
@@ -1867,14 +1879,14 @@ def _(data_loo, data_loo_jacknife, np, plt):
 
 
 @app.cell
-def _(ellipse_areas, jackknife_areas, np, plt):
-    from scipy import stats
+def _(ellipse_areas, jackknife_areas, np, plt, scipy):
+
     def plot_jk_std():
         x = np.asarray(jackknife_areas)
         y = np.asarray(ellipse_areas)
 
         # Linear fit
-        res = stats.linregress(x, y)
+        res = scipy.stats.linregress(x, y)
         r2 = res.rvalue ** 2
 
         # Fit line across the data range
@@ -1893,14 +1905,12 @@ def _(ellipse_areas, jackknife_areas, np, plt):
         plt.show()
 
     plot_jk_std()
-    return (stats,)
+    return
 
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
-    ## Empirical Coverage Probability
-    """)
+    mo.md(r"""## Empirical Coverage Probability""")
     return
 
 
@@ -1912,7 +1922,7 @@ def _(np):
         d = np.asarray(true_point) - mean
         m2 = d @ np.linalg.solve(cov, d)
         return m2 <= n_std**2
-    
+
     def empirical_coverage(xs, ys, truths, n_std=1.0):
         inside = [
             point_in_confidence_ellipse(x, y, t, n_std)
@@ -1958,9 +1968,10 @@ def _(chi2, empirical_coverage, np, truths, xs, ys):
 def _(empirical, expected, n_stds, plt):
     plt.plot(n_stds, expected, label='expected')
     plt.plot(n_stds, empirical, label='empirical')
-    plt.xlabel("n_std")
-    plt.ylabel("Coverage fraction")
+    plt.xlabel("number of standard deviations")
+    plt.ylabel("coverage fraction")
     plt.legend()
+    plt.savefig("empirical_coverage_A.pdf", format="pdf")
     plt.show()
     return
 
@@ -1969,18 +1980,17 @@ def _(empirical, expected, n_stds, plt):
 def _(empirical, expected, plt):
     plt.plot(expected, empirical, label="empirical coverage")
     plt.plot([0,1], '--', color='black', label="expected coverage")
-    plt.xlabel("Chi-squared confidence level")
-    plt.ylabel("Empirical prediction coverage")
+    plt.xlabel("chi-squared confidence level")
+    plt.ylabel("empirical prediction coverage")
     plt.legend()
+    plt.savefig("empirical_coverage_B.pdf", format="pdf")
     plt.show()
     return
 
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
-    ### sensor importance
-    """)
+    mo.md(r"""### sensor importance""")
     return
 
 
@@ -2119,9 +2129,7 @@ def _(
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
-    ## learning curve
-    """)
+    mo.md(r"""## learning curve""")
     return
 
 
@@ -2177,13 +2185,15 @@ def _(learning_curve, plt, run_learning_curve):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
+    mo.md(
+        r"""
     # ☢️ source presence classifier
 
     distinguish source presence from background.
 
     ##  background data
-    """)
+    """
+    )
     return
 
 
@@ -2244,9 +2254,7 @@ def _(data_bkg):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
-    classification. concatentate the background with non-background.
-    """)
+    mo.md(r"""classification. concatentate the background with non-background.""")
     return
 
 
@@ -2412,9 +2420,7 @@ def _(
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
-    viz the ones we got wrong
-    """)
+    mo.md(r"""viz the ones we got wrong""")
     return
 
 
@@ -2440,21 +2446,25 @@ def _(data_loo_c, disagreement_selector, viz_sensor_readout):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
+    mo.md(
+        r"""
     # ☢️ traditional least squares estimation of the source location
 
     first, calibrate a curve that gives sensor response to the source as a function of distance from the source.
-    """)
+    """
+    )
     return
 
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
+    mo.md(
+        r"""
     ## calibration curve
 
     output of sensor as a function of distance from source.
-    """)
+    """
+    )
     return
 
 
@@ -2484,9 +2494,7 @@ def _(np, pd):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
-    ### fit detector response function to data
-    """)
+    mo.md(r"""### fit detector response function to data""")
     return
 
 
@@ -2582,11 +2590,13 @@ def _(output_distance_data):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
+    mo.md(
+        r"""
     ### retreive distance from detector output
 
     second, given a sensor's reading, predict the distance of the source from it. this puts a circle around the sensor.
-    """)
+    """
+    )
     return
 
 
@@ -2616,11 +2626,13 @@ def _(find_distance_to_detector, opt_params):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
+    mo.md(
+        r"""
     ## least squares estimator for location of source
 
     third, given the response of the sensor network, select the subset of sensors that come into play with a detectable response.
-    """)
+    """
+    )
     return
 
 
@@ -2646,9 +2658,7 @@ def _(Nds, data, sensors):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
-    some of the experiments led to no detectable response for ANY sensor. these are false negatives.
-    """)
+    mo.md(r"""some of the experiments led to no detectable response for ANY sensor. these are false negatives.""")
     return
 
 
@@ -2661,9 +2671,7 @@ def _(Nds, data, sensors):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
-    when a SINGLE sensor in the network elicits a warning, we consider that a positive. but we need three for triangulation. so we select the top three sensors in terms of response from baseline.
-    """)
+    mo.md(r"""when a SINGLE sensor in the network elicits a warning, we consider that a positive. but we need three for triangulation. so we select the top three sensors in terms of response from baseline.""")
     return
 
 
@@ -2683,9 +2691,7 @@ def _(Nds, data, sensors):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
-    finally, the traditional localization method that finds source location most consistent with the "measured" distance. here measured means we look at the response and infer the distance from the calibration curve. now we search for source location that is most consistent with those distances we measure.
-    """)
+    mo.md(r"""finally, the traditional localization method that finds source location most consistent with the "measured" distance. here measured means we look at the response and infer the distance from the calibration curve. now we search for source location that is most consistent with those distances we measure.""")
     return
 
 
@@ -2825,9 +2831,7 @@ def _(Nds, data, opt_params, sensors, trad_localize):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
-    🥞 let's do it!
-    """)
+    mo.md(r"""🥞 let's do it!""")
     return
 
 
@@ -2885,11 +2889,13 @@ def _(data_loo, data_trad):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
+    mo.md(
+        r"""
     ## ☢️ a sub-baseline: simple triangulation
 
     weighted average of significant sensor locations.
-    """)
+    """
+    )
     return
 
 
@@ -2923,9 +2929,7 @@ def _(calculate_errors, data, dumb_triangulation, opt_params, sensors):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
-    Vizualizes the source locations where no solution was able to be found b/c no significant sensors
-    """)
+    mo.md(r"""Vizualizes the source locations where no solution was able to be found b/c no significant sensors""")
     return
 
 
@@ -2938,9 +2942,7 @@ def _(data, data_trad, np, viz_source_locs):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
-    ...when the errors are huge.
-    """)
+    mo.md(r"""...when the errors are huge.""")
     return
 
 
@@ -2954,9 +2956,7 @@ def _(data, data_trad, viz_source_locs):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
-    ## compare errors among methods
-    """)
+    mo.md(r"""## compare errors among methods""")
     return
 
 
@@ -3052,9 +3052,7 @@ def _(data_rand, learning_curve, plt, theme_colors):
 
 @app.cell
 def _(mo):
-    mo.md(r"""
-    #### P-test between ERT ensemble and multilateration
-    """)
+    mo.md(r"""#### P-test between ERT ensemble and multilateration""")
     return
 
 
@@ -3118,9 +3116,7 @@ def _(ert_errors, mtl_errors, plt):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
-    # 🚓 tracking
-    """)
+    mo.md(r"""# 🚓 tracking""")
     return
 
 
@@ -3536,9 +3532,7 @@ def _(
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
-    ### Plot Error vs Variance
-    """)
+    mo.md(r"""### Plot Error vs Variance""")
     return
 
 
@@ -3605,9 +3599,9 @@ def _(np, plot_data, plt):
                  label=f"$R^2$ = {r2:.3f}")
         plt.xlabel("Std Across Trees (in)")
         plt.ylabel("LOOCV prediction error (in)")
-    
+
         plt.gca().set_aspect('equal', adjustable='box')
-    
+
         plt.legend()
         plt.show()
         return
@@ -3693,10 +3687,12 @@ def _(data_loo, np, plt):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
+    mo.md(
+        r"""
     # positional variance of detector readout
     (with a source present)
-    """)
+    """
+    )
     return
 
 
@@ -3855,7 +3851,7 @@ def _(box_dims, np, pd, variance_stats):
 
 @app.cell
 def _(averaged_positional_stats):
-    averaged_positional_stats
+    averaged_positional_stats["CV%"].std()
     return
 
 
@@ -3886,9 +3882,7 @@ def _(
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
-    ### study of how sensor noise affects prediction variance
-    """)
+    mo.md(r"""### study of how sensor noise affects prediction variance""")
     return
 
 
@@ -3969,6 +3963,12 @@ def _(np, pd, pred_new_test):
 
 
 @app.cell
+def _(std_d_from_mean_pred):
+    std_d_from_mean_pred["std_d_from_mean_pred"].mean()
+    return
+
+
+@app.cell
 def _(averaged_positional_stats, np, pd, plt, stats, std_d_from_mean_pred):
     def plot_pred_readout_var():
         corr_pred_input_noise = pd.merge(std_d_from_mean_pred, averaged_positional_stats, on="region")
@@ -3979,11 +3979,11 @@ def _(averaged_positional_stats, np, pd, plt, stats, std_d_from_mean_pred):
         # Drop NaNs so linregress doesn't return NaN
         mask = np.isfinite(x) & np.isfinite(y)
         x, y = x[mask], y[mask]
-    
+
         # Linear fit
         res = stats.linregress(x, y)
         r2 = res.rvalue ** 2
-    
+
         x_fit = np.linspace(x.min(), x.max(), 100)
         y_fit = res.slope * x_fit + res.intercept
 
@@ -3991,7 +3991,7 @@ def _(averaged_positional_stats, np, pd, plt, stats, std_d_from_mean_pred):
         plt.scatter(x, y)
         plt.plot(x_fit, y_fit, "--", color="black",
         label=f"fit: y = {res.slope:.3g}x + {res.intercept:.3g}\n$R^2$ = {r2:.3f}")
-    
+
         plt.xlabel("average CV of\nsensor network readout [%]")
         plt.ylabel("STD of predicted\nsource position [in]")
         plt.legend()
@@ -4031,18 +4031,18 @@ def _(pred_new_test):
 @app.cell
 def _(np, plt, pred_new_test, pred_std_due_to_sensor_noise, stats):
     def plot_err_by_var():
-    
+
         x = np.array(pred_new_test.groupby('region').mean()["error"])
         y = np.array(pred_std_due_to_sensor_noise["STD of y_s_pred"])
-    
+
         # Drop NaNs so linregress doesn't return NaN
         mask = np.isfinite(x) & np.isfinite(y)
         x, y = x[mask], y[mask]
-    
+
         # Linear fit
         res = stats.linregress(x, y)
         r2 = res.rvalue ** 2
-    
+
         x_fit = np.linspace(x.min(), x.max(), 100)
         y_fit = res.slope * x_fit + res.intercept
 
@@ -4072,18 +4072,18 @@ def _(
 ):
     def plot_meas_err_by_var():
         corr_pred_input_noise = pd.merge(std_d_from_mean_pred, averaged_positional_stats, on="region")
-    
+
         x = np.array(pred_new_test.groupby('region').mean()["error"])
         y = corr_pred_input_noise["CV%"].to_numpy(dtype=float)
-    
+
         # Drop NaNs so linregress doesn't return NaN
         mask = np.isfinite(x) & np.isfinite(y)
         x, y = x[mask], y[mask]
-    
+
         # Linear fit
         res = stats.linregress(x, y)
         r2 = res.rvalue ** 2
-    
+
         x_fit = np.linspace(x.min(), x.max(), 100)
         y_fit = res.slope * x_fit + res.intercept
 
