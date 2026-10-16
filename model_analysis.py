@@ -1965,6 +1965,17 @@ def _(empirical, expected, n_stds, plt):
     return
 
 
+@app.cell
+def _(empirical, expected, plt):
+    plt.plot(expected, empirical, label="empirical coverage")
+    plt.plot([0,1], '--', color='black', label="expected coverage")
+    plt.xlabel("Chi-squared confidence level")
+    plt.ylabel("Empirical prediction coverage")
+    plt.legend()
+    plt.show()
+    return
+
+
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
