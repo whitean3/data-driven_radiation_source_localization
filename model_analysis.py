@@ -3596,12 +3596,18 @@ def _(np, plot_data, plt):
         # Plot
         xline = np.linspace(0, 20, 20)
         plt.scatter(avg_vars, error)
-        plt.xlim(0,20)
-        plt.ylim(0,20)
+        plt.xlim(0, 20)
+        plt.ylim(0, 20)
+        plt.xticks(np.linspace(0, 20, 5))
+        plt.yticks(np.linspace(0, 20, 5))
+        plt.grid(visible=True, which='both')
         plt.plot(xline, a * xline + b, linestyle="dashed", color="black",
                  label=f"$R^2$ = {r2:.3f}")
         plt.xlabel("Std Across Trees (in)")
         plt.ylabel("LOOCV prediction error (in)")
+    
+        plt.gca().set_aspect('equal', adjustable='box')
+    
         plt.legend()
         plt.show()
         return
@@ -3611,12 +3617,6 @@ def _(np, plot_data, plt):
 @app.cell
 def _(plot_err_vs_var):
     plot_err_vs_var()
-    return
-
-
-@app.cell
-def _(np):
-    np.max
     return
 
 
