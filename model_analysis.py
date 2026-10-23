@@ -1912,7 +1912,7 @@ def _(np):
         d = np.asarray(true_point) - mean
         m2 = d @ np.linalg.solve(cov, d)
         return m2 <= n_std**2
-    
+
     def empirical_coverage(xs, ys, truths, n_std=1.0):
         inside = [
             point_in_confidence_ellipse(x, y, t, n_std)
@@ -1950,7 +1950,6 @@ def _(chi2, empirical_coverage, np, truths, xs, ys):
         print("# Standard Deviations:", n_std)
         print("\tExpected Coverage:", round(expected[-1]*100, ndigits=1), '%')
         print("\tEmpirical Coverage:", empirical[-1]*100, '%')
-
     return empirical, expected, n_stds
 
 
@@ -2115,6 +2114,31 @@ def _(
         savename="impurity_sensor_importance_scores"
     )
     return (viz_sensor_importance,)
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Performance by training density
+    """)
+    return
+
+
+@app.cell
+def _(data_loo, np):
+    coords = data_loo[["x_s", "y_s"]].to_numpy()
+    d = np.linalg.norm(coords[:, None] - coords[None, :], axis=-1)
+    np.fill_diagonal(d, np.inf)
+    data_loo["nearest_dist"] = d.min(axis=1)
+    return
+
+
+@app.cell
+def _(data_loo, plt):
+    plt.scatter(data_loo['nearest_dist'], data_loo['error'])
+    plt.xlabel("distance other data point (in.)")
+    plt.ylabel("LOOCV error (in.)")
+    return
 
 
 @app.cell(hide_code=True)
@@ -3605,9 +3629,9 @@ def _(np, plot_data, plt):
                  label=f"$R^2$ = {r2:.3f}")
         plt.xlabel("Std Across Trees (in)")
         plt.ylabel("LOOCV prediction error (in)")
-    
+
         plt.gca().set_aspect('equal', adjustable='box')
-    
+
         plt.legend()
         plt.show()
         return
@@ -3979,11 +4003,11 @@ def _(averaged_positional_stats, np, pd, plt, stats, std_d_from_mean_pred):
         # Drop NaNs so linregress doesn't return NaN
         mask = np.isfinite(x) & np.isfinite(y)
         x, y = x[mask], y[mask]
-    
+
         # Linear fit
         res = stats.linregress(x, y)
         r2 = res.rvalue ** 2
-    
+
         x_fit = np.linspace(x.min(), x.max(), 100)
         y_fit = res.slope * x_fit + res.intercept
 
@@ -3991,7 +4015,7 @@ def _(averaged_positional_stats, np, pd, plt, stats, std_d_from_mean_pred):
         plt.scatter(x, y)
         plt.plot(x_fit, y_fit, "--", color="black",
         label=f"fit: y = {res.slope:.3g}x + {res.intercept:.3g}\n$R^2$ = {r2:.3f}")
-    
+
         plt.xlabel("average CV of\nsensor network readout [%]")
         plt.ylabel("STD of predicted\nsource position [in]")
         plt.legend()
@@ -4031,18 +4055,18 @@ def _(pred_new_test):
 @app.cell
 def _(np, plt, pred_new_test, pred_std_due_to_sensor_noise, stats):
     def plot_err_by_var():
-    
+
         x = np.array(pred_new_test.groupby('region').mean()["error"])
         y = np.array(pred_std_due_to_sensor_noise["STD of y_s_pred"])
-    
+
         # Drop NaNs so linregress doesn't return NaN
         mask = np.isfinite(x) & np.isfinite(y)
         x, y = x[mask], y[mask]
-    
+
         # Linear fit
         res = stats.linregress(x, y)
         r2 = res.rvalue ** 2
-    
+
         x_fit = np.linspace(x.min(), x.max(), 100)
         y_fit = res.slope * x_fit + res.intercept
 
@@ -4072,18 +4096,18 @@ def _(
 ):
     def plot_meas_err_by_var():
         corr_pred_input_noise = pd.merge(std_d_from_mean_pred, averaged_positional_stats, on="region")
-    
+
         x = np.array(pred_new_test.groupby('region').mean()["error"])
         y = corr_pred_input_noise["CV%"].to_numpy(dtype=float)
-    
+
         # Drop NaNs so linregress doesn't return NaN
         mask = np.isfinite(x) & np.isfinite(y)
         x, y = x[mask], y[mask]
-    
+
         # Linear fit
         res = stats.linregress(x, y)
         r2 = res.rvalue ** 2
-    
+
         x_fit = np.linspace(x.min(), x.max(), 100)
         y_fit = res.slope * x_fit + res.intercept
 
