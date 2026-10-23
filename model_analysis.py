@@ -964,7 +964,7 @@ def _(np):
             (data["x_s"] - data["x_s_pred"]) ** 2 + (data["y_s"] - data["y_s_pred"]) ** 2
         )
 
-        print("RMSE: ", np.mean(np.sqrt(data["error_x"] ** 2 + data["error_y"] ** 2)))
+        print("mean error in distance [in]: ", np.mean(np.sqrt(data["error_x"] ** 2 + data["error_y"] ** 2)))
     return (calculate_errors,)
 
 
@@ -1084,7 +1084,7 @@ def _(ExtraTreesRegressor, RandomizedSearchCV, RepeatedKFold):
         # ---------------------------------------------------------------------------
         # 3. Inner loop: hyperparameter selection via RandomizedSearchCV + RepeatedKFold
         # ---------------------------------------------------------------------------
-        inner_cv = RepeatedKFold(n_splits=3, n_repeats=3, random_state=RANDOM_STATE)
+        inner_cv = RepeatedKFold(n_splits=3, n_repeats=10, random_state=RANDOM_STATE)
 
         search = RandomizedSearchCV(
             estimator=ExtraTreesRegressor(random_state=RANDOM_STATE),
@@ -1137,8 +1137,65 @@ def _(ExtraTreesRegressor, do_hyp_opt, np, sensors, train_test_split):
 
 
 @app.cell
+def _(ExtraTreesRegressor, data, np, plt, sensors, train_test_split):
+    def scan_max_depths(data, n_repeats=10, max_depths=np.arange(4, 25)):
+        X = np.array(data.loc[:, sensors])
+        y = np.array(data.loc[:, ["x_s", "y_s"]])
+ 
+        # rmses[i, j] = RMSE for repeat i at max_depths[j]
+        rmses = np.zeros((n_repeats, len(max_depths)))
+ 
+        for i in range(n_repeats):
+            # New train/test split each repeat
+            X_train, X_test, y_train, y_test = train_test_split(
+                X, y, test_size=0.2, random_state=i
+            )
+ 
+            for j, max_depth in enumerate(max_depths):
+                model = ExtraTreesRegressor(
+                    n_estimators=250,
+                    max_depth=max_depth,
+                    random_state=i,
+                    n_jobs=-1,
+                )
+                model.fit(X_train, y_train)
+ 
+                y_pred = model.predict(X_test)
+                rmses[i, j] = np.sqrt(np.mean((y_pred - y_test) ** 2))
+ 
+            print(f"Repeat {i + 1}/{n_repeats} done")
+ 
+        mean_rmse = rmses.mean(axis=0)
+        std_rmse = rmses.std(axis=0)
+ 
+        plt.figure()
+        plt.xlabel("max depth")
+        plt.ylabel("RMSE [in]")
+        # Individual repeats, faint
+        for i in range(n_repeats):
+            plt.plot(max_depths, rmses[i], color="gray", alpha=0.25, lw=0.8)
+        # Mean with ±1 std band
+        plt.plot(max_depths, mean_rmse, marker="s", label=f"mean of {n_repeats} repeats")
+        plt.fill_between(max_depths, mean_rmse - std_rmse, mean_rmse + std_rmse,
+                         alpha=0.3, label="±1 std")
+        plt.legend()
+        plt.tight_layout()
+        plt.savefig("max_depth_scan.pdf", format="pdf")
+        plt.show()
+
+    scan_max_depths(data)
+    return
+
+
+@app.cell
 def _(data, eval_hp_search):
     eval_hp_search(data)
+    return
+
+
+@app.cell
+def _():
+    2.18-2.05
     return
 
 
@@ -1271,7 +1328,7 @@ def _(box_dims, data_grid, np, plt, setup_environment, viz_sensor_locs):
         for i in range(1, n_grid):
             plt.axvline(x_grid[i], linestyle="--", color="k")
             plt.axhline(y_grid[i], linestyle="--", color="k")
-    
+
         plt.scatter(data_grid["x"], data_grid["y"], c=data_grid["error"], s=250, cmap="plasma", edgecolor="k")
         plt.colorbar(label="error [in]")
         plt.savefig("grid_CV.pdf", format="pdf")
@@ -2802,9 +2859,10 @@ def _(bkg_avg, data, errors_by_k, np, opt_params, sensors, trad_localize):
 
             errors_by_k.loc[n,"avg_err"] =(
                 np.mean(
-                np.sqrt((data["x_s"] - [xy_trad_preds[exp][0] for exp in range(data.shape[0])]) ** 2 + (data["y_s"] - 
-                        [xy_trad_preds[exp][1] for exp in range(data.shape[0])]) ** 2)
-                )
+                    np.sqrt(
+                        (data["x_s"] - [xy_trad_preds[exp][0] for exp in range(data.shape[0])]) ** 2 + (
+                        data["y_s"] - [xy_trad_preds[exp][1] for exp in range(data.shape[0])]) ** 2)
+                ) # mean distance
             )
 
         return avg_errs
