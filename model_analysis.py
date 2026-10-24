@@ -1507,7 +1507,7 @@ def _(
 @app.cell
 def _(Ellipse, np, transforms):
     # from https://matplotlib.org/stable/gallery/statistics/confidence_ellipse.html
-    def draw_confidence_ellipse(x, y, ax, n_std=1.0, facecolor='none', **kwargs):
+    def draw_confidence_ellipse(x, y, ax, n_std=1.15, facecolor='none', **kwargs): #1.15 based on 90% coverage probs
         if x.size != y.size:
             raise ValueError("x and y must be the same size")
 
@@ -1781,8 +1781,7 @@ def _(
             )
             """
         if incl_ellipse:
-            draw_confidence_ellipse(xs_preds, ys_preds, ax, facecolor=thing_to_color["pred source loc"], alpha=0.2)
-            draw_confidence_ellipse(xs_preds, ys_preds, ax, n_std=2.0, facecolor=thing_to_color["pred source loc"], alpha=0.2)
+            draw_confidence_ellipse(xs_preds, ys_preds, ax, facecolor=thing_to_color["pred source loc"], alpha=0.2) # 1.15 justified by coverage probability
         for sensor in sensors:
                 plt.annotate(
                     f"{sensor_to_nice_int[sensor]}",
@@ -1865,8 +1864,8 @@ def _(
             )
             """
         if incl_ellipse:
-            draw_confidence_ellipse(xs_preds, ys_preds, ax, facecolor=thing_to_color["pred source loc"], alpha=0.2)
-            draw_confidence_ellipse(xs_preds, ys_preds, ax, n_std=2.0, facecolor=thing_to_color["pred source loc"], alpha=0.2)
+            draw_confidence_ellipse(xs_preds, ys_preds, ax, facecolor=thing_to_color["pred source loc"], alpha=0.2) # 90% CI
+            # draw_confidence_ellipse(xs_preds, ys_preds, ax, n_std=2.0, facecolor=thing_to_color["pred source loc"], alpha=0.2)
 
 
         # viz uncertainty quantification
@@ -1894,7 +1893,7 @@ def _(
                 )
         handles, labels = plt.gca().get_legend_handles_labels()
         plt.legend(handles[-2:], labels[-2:], bbox_to_anchor=(1.3, 0.5), loc='upper left', borderaxespad=0)
-        plt.savefig("conf_ellipse.pdf", format="pdf", bbox_inches='tight')
+        # plt.savefig("conf_ellipse.pdf", format="pdf", bbox_inches='tight')
         plt.show()
     _exp=12
     show_both(data_loo, data_loo_jacknife, _exp, n_samples=25)
@@ -1973,14 +1972,14 @@ def _(mo):
 
 @app.cell
 def _(np):
-    def point_in_confidence_ellipse(x, y, true_point, n_std=1.0):
+    def point_in_confidence_ellipse(x, y, true_point, n_std=1.15):
         mean = np.array([np.mean(x), np.mean(y)])
         cov = np.cov(x, y)                      # same as in your draw function
         d = np.asarray(true_point) - mean
         m2 = d @ np.linalg.solve(cov, d)
         return m2 <= n_std**2
 
-    def empirical_coverage(xs, ys, truths, n_std=1.0):
+    def empirical_coverage(xs, ys, truths, n_std=1.15):
         inside = [
             point_in_confidence_ellipse(x, y, t, n_std)
             for x, y, t in zip(xs, ys, truths)
@@ -3139,7 +3138,6 @@ def _(np):
 
         p_two_sided = (np.sum(np.abs(null_dist) >= abs(observed)) + 1) / (n_boot + 1)
 
-
         return {
             "mean_diff": observed,
             "ci_95": tuple(ci),
@@ -3296,8 +3294,14 @@ def _(np, sensors, tracking_15s_data, tree_ensemble):
 
 
 @app.cell
-def _(tracking_15s_data_pred):
-    tracking_15s_data_pred
+def _(calculate_errors, tracking_15s_data_pred):
+    calculate_errors(tracking_15s_data_pred)
+    return
+
+
+@app.cell
+def _(calculate_errors, tracking_data_pred):
+    calculate_errors(tracking_data_pred)
     return
 
 
@@ -3322,166 +3326,6 @@ def _(do_jackknife_plus_loo, tracking_15s_data_pred):
 @app.cell
 def _(tracking_data_pred_jk):
     tracking_data_pred_jk
-    return
-
-
-@app.cell(hide_code=True)
-def _(np):
-    from scipy.stats import gaussian_kde
-    from matplotlib.colors import Normalize
-    from matplotlib.cm import ScalarMappable
-
-
-    def plot_ensemble_kde(ax, ensemble_array, weights=None, true_position=None, cmap="hot_r",
-                          kde_resolution=100, alpha_fill=0.3, alpha_contour=0.9,
-                          bw_method="silverman", label=None):
-        """
-        Compute and plot the Kernel Density Estimate of ensemble tree predictions
-        on a given matplotlib Axes.
-
-        Parameters
-        ----------
-        ax : matplotlib.axes.Axes
-            The axis on which to render the KDE.
-        ensemble_array : np.ndarray, shape (2, N)
-            Array of ensemble predictions where row 0 is x-coordinates and
-            row 1 is y-coordinates (e.g. 250 trees → shape (2, 250)).
-        true_position : array-like of shape (2,), optional
-            Ground-truth (x, y) position to mark on the plot.
-        cmap : str or Colormap
-            Colormap used to colour the density fill. Default 'hot_r'.
-        kde_resolution : int
-            Number of grid points per axis for evaluating the KDE. Default 100.
-        alpha_fill : float
-            Opacity of the filled density surface. Default 0.75.
-        alpha_contour : float
-            Opacity of the density contour lines. Default 0.9.
-        bw_method : str or float
-            Bandwidth estimation method passed to scipy.stats.gaussian_kde.
-            'scott' (default) or 'silverman', or a scalar factor.
-        label : str, optional
-            Text label drawn near the mean prediction (useful when overlaying
-            multiple positions on the same axis).
-
-        Returns
-        -------
-        kde : scipy.stats.gaussian_kde
-            The fitted KDE object (useful for downstream queries, e.g. pdf(point)).
-        mean_pos : np.ndarray, shape (2,)
-            Mean (x, y) of the ensemble predictions.
-        """
-        if ensemble_array.shape[0] != 2:
-            raise ValueError(
-                f"ensemble_array must have shape (2, N), got {ensemble_array.shape}. "
-                "Row 0 = x, Row 1 = y."
-            )
-
-        x, y = ensemble_array[0], ensemble_array[1]
-
-        # ------------------------------------------------------------------ #
-        # 1. Fit KDE                                                           #
-        # ------------------------------------------------------------------ #
-        kde = gaussian_kde(ensemble_array, bw_method=bw_method, weights=weights)
-        # ------------------------------------------------------------------ #
-        # 2. Evaluation grid — add a small margin around the prediction cloud #
-        # ------------------------------------------------------------------ #
-        margin_x = (x.max() - x.min()) * 0.35 + 1e-6   # guard against zero spread
-        margin_y = (y.max() - y.min()) * 0.35 + 1e-6
-
-        xi = np.linspace(x.min() - margin_x, x.max() + margin_x, kde_resolution)
-        yi = np.linspace(y.min() - margin_y, y.max() + margin_y, kde_resolution)
-        Xi, Yi = np.meshgrid(xi, yi)
-        grid_coords = np.vstack([Xi.ravel(), Yi.ravel()])
-        Zi = kde(grid_coords).reshape(Xi.shape)
-
-        # ------------------------------------------------------------------ #
-        # 3. Render filled density surface + contours                         #
-        # ------------------------------------------------------------------ #
-        ax.contourf(Xi, Yi, Zi, levels=12, cmap=cmap, alpha=alpha_fill)
-        ax.contour(Xi, Yi, Zi, levels=6, cmap=cmap, alpha=alpha_contour,
-                   linewidths=0.6)
-
-        # ------------------------------------------------------------------ #
-        # 4. Mark the mean prediction                                         #
-        # ------------------------------------------------------------------ #
-        """
-        mean_pos = ensemble_array.mean(axis=1)
-        ax.scatter(*mean_pos, marker="+", s=120, color="white", linewidths=1.8,
-                   zorder=5, label="Mean prediction" if label is None else None)
-
-        if label is not None:
-            ax.annotate(label, xy=mean_pos, xytext=(4, 4),
-                        textcoords="offset points", color="white",
-                        fontsize=7, fontweight="bold", zorder=6)
-        """
-        # ------------------------------------------------------------------ #
-        # 5. Optionally mark ground truth                                     #
-        # ------------------------------------------------------------------ #
-        if true_position is not None:
-            tp = np.asarray(true_position)
-            ax.scatter(*tp, marker="*", s=180, color="cyan", edgecolors="black",
-                       linewidths=0.6, zorder=6, label="True position")
-
-        return kde
-
-    """
-    # ======================================================================= #
-    # Demo — remove or guard with  if __name__ == "__main__":  in production  #
-    # ======================================================================= #
-    if __name__ == "__main__":
-        rng = np.random.default_rng(42)
-        n_trees = 250
-        n_positions = 6
-
-        # Simulate a source moving along a curved path
-        t = np.linspace(0, 2 * np.pi, n_positions, endpoint=False)
-        true_xs = 3.0 * np.cos(t)
-        true_ys = 1.5 * np.sin(t)
-
-        # Each position has growing uncertainty to show changing KDE width
-        noise_scale = np.linspace(0.05, 0.35, n_positions)
-
-        fig, axes = plt.subplots(2, 3, figsize=(12, 7),
-                                 facecolor="#0d0d0d")
-        fig.suptitle("Ensemble KDE — Source Path Error Visualisation",
-                     color="white", fontsize=13, y=1.01)
-
-        for i, ax in enumerate(axes.flat):
-            ax.set_facecolor("#0d0d0d")
-
-            # Simulate ensemble predictions: bivariate Gaussian centred on truth
-            preds = rng.normal(
-                loc=[[true_xs[i]], [true_ys[i]]],
-                scale=noise_scale[i],
-                size=(2, n_trees)
-            )
-
-            kde, mean = plot_ensemble_kde(
-                ax=ax,
-                ensemble_array=preds,
-                true_position=(true_xs[i], true_ys[i]),
-                cmap="inferno",
-                kde_resolution=120,
-                label=f"t={i}",
-            )
-
-            ax.set_title(f"Position {i+1}  (σ≈{noise_scale[i]:.2f})",
-                         color="white", fontsize=9)
-            ax.tick_params(colors="grey", labelsize=7)
-            for spine in ax.spines.values():
-                spine.set_edgecolor("#333333")
-
-            # Legend only on first panel
-            if i == 0:
-                leg = ax.legend(fontsize=7, facecolor="#1a1a1a",
-                                labelcolor="white", framealpha=0.8)
-
-        plt.tight_layout()
-        plt.savefig("/mnt/user-data/outputs/kde_ensemble_demo.png",
-                    dpi=150, bbox_inches="tight", facecolor=fig.get_facecolor())
-        plt.show()
-        print("Saved → kde_ensemble_demo.png")
-    """
     return
 
 
@@ -3533,7 +3377,7 @@ def _(
             xs_preds = np.array([xs[0] for xs in _tracking_data.loc[exp, "ensemble pred source locs"]])
             ys_preds = np.array([xs[1] for xs in _tracking_data.loc[exp, "ensemble pred source locs"]])
 
-            draw_confidence_ellipse(xs_preds, ys_preds, ax, facecolor=thing_to_color["pred source loc"], alpha=0.15, n_std=1)
+            draw_confidence_ellipse(xs_preds, ys_preds, ax, facecolor=thing_to_color["pred source loc"], alpha=0.15)
             #plot_ensemble_kde(ax, combined, bw_method='scott', cmap="YlGn", alpha_fill=0.01)
 
         """
